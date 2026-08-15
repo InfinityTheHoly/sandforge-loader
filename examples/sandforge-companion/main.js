@@ -1,4 +1,4 @@
-const MOD_ID = "sandforge.example";
+const MOD_ID = "sandustry.sandforge-companion";
 const GITHUB_URL = "https://github.com/InfinityTheHoly/sandforge-loader";
 const AUTHOR_URL = "https://github.com/InfinityTheHoly";
 
@@ -71,7 +71,7 @@ function readModText(rel) {
 }
 
 function runSource(code, label) {
-  (0, eval)(code + "\n//# sourceURL=sandforge-example/" + label);
+  (0, eval)(code + "\n//# sourceURL=sandforge-companion/" + label);
 }
 
 function looksLikeLoader(sf) {
@@ -233,13 +233,13 @@ function StatusBadge() {
         ? "SandForge loader is running. Ctrl-click for Arcade."
         : "SandForge loader is not installed",
       onClick: function (e) {
-        if ((e.ctrlKey || e.metaKey) && window.SandforgeExample) {
+        if ((e.ctrlKey || e.metaKey) && window.SandforgeCompanion) {
           e.preventDefault();
           e.stopPropagation();
-          window.SandforgeExample.play();
+          window.SandforgeCompanion.play();
           return;
         }
-        if (window.SandforgeExample) window.SandforgeExample.open();
+        if (window.SandforgeCompanion) window.SandforgeCompanion.open();
       },
       style: badgeStyle(active),
     },
@@ -248,19 +248,19 @@ function StatusBadge() {
 }
 
 var FALLBACK_CSS =
-  "#sf-example-overlay{position:fixed;inset:0;z-index:100060;display:none;align-items:center;justify-content:center;background:rgba(5,7,10,0.78);font-family:'Segoe UI','Noto Sans',system-ui,sans-serif;color:#fff;}" +
-  "#sf-example-overlay.open{display:flex;}" +
-  "#sf-example-overlay .sf-ex-panel{width:min(720px,calc(100vw - 32px));max-height:min(84vh,760px);display:flex;flex-direction:column;background:rgba(0,0,0,0.94);border:1px solid rgba(203,213,225,0.86);border-radius:2px 12px 2px 12px;padding:20px 22px 16px;overflow:hidden;}" +
-  "#sf-example-overlay .sf-ex-header{display:flex;justify-content:space-between;gap:12px;}" +
-  "#sf-example-overlay .sf-ex-header h2{margin:0;color:#ffe700;letter-spacing:.08em;text-transform:uppercase;font-size:18px;}" +
-  "#sf-example-overlay .sf-ex-sub{margin:6px 0 0;color:#cbd5e1;font-size:13px;}" +
-  "#sf-example-overlay .sf-ex-close,#sf-example-overlay .sf-ex-btn,#sf-example-overlay .sf-ex-tab{cursor:pointer;border:1px solid rgba(203,213,225,0.86);background:#0c1016;color:#fff;border-radius:2px 10px 2px 10px;padding:8px 12px;font-weight:700;}" +
-  "#sf-example-overlay .sf-ex-btn.primary,#sf-example-overlay .sf-ex-tab.active{background:#ffe700;border-color:#ffe700;color:#080804;}" +
-  "#sf-example-overlay .sf-ex-body{margin-top:14px;overflow:auto;flex:1;}" +
-  "#sf-example-overlay .sf-ex-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;}";
+  "#sf-companion-overlay{position:fixed;inset:0;z-index:100060;display:none;align-items:center;justify-content:center;background:rgba(5,7,10,0.78);font-family:'Segoe UI','Noto Sans',system-ui,sans-serif;color:#fff;}" +
+  "#sf-companion-overlay.open{display:flex;}" +
+  "#sf-companion-overlay .sf-ex-panel{width:min(720px,calc(100vw - 32px));max-height:min(84vh,760px);display:flex;flex-direction:column;background:rgba(0,0,0,0.94);border:1px solid rgba(203,213,225,0.86);border-radius:2px 12px 2px 12px;padding:20px 22px 16px;overflow:hidden;}" +
+  "#sf-companion-overlay .sf-ex-header{display:flex;justify-content:space-between;gap:12px;}" +
+  "#sf-companion-overlay .sf-ex-header h2{margin:0;color:#ffe700;letter-spacing:.08em;text-transform:uppercase;font-size:18px;}" +
+  "#sf-companion-overlay .sf-ex-sub{margin:6px 0 0;color:#cbd5e1;font-size:13px;}" +
+  "#sf-companion-overlay .sf-ex-close,#sf-companion-overlay .sf-ex-btn,#sf-companion-overlay .sf-ex-tab{cursor:pointer;border:1px solid rgba(203,213,225,0.86);background:#0c1016;color:#fff;border-radius:2px 10px 2px 10px;padding:8px 12px;font-weight:700;}" +
+  "#sf-companion-overlay .sf-ex-btn.primary,#sf-companion-overlay .sf-ex-tab.active{background:#ffe700;border-color:#ffe700;color:#080804;}" +
+  "#sf-companion-overlay .sf-ex-body{margin-top:14px;overflow:auto;flex:1;}" +
+  "#sf-companion-overlay .sf-ex-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;}";
 
 function injectCss(text) {
-  var id = text && text !== FALLBACK_CSS ? "sf-example-css" : "sf-example-css-fallback";
+  var id = text && text !== FALLBACK_CSS ? "sf-companion-css" : "sf-companion-css-fallback";
   if (document.getElementById(id)) return;
   var style = document.createElement("style");
   style.id = id;
@@ -269,13 +269,13 @@ function injectCss(text) {
 }
 
 function ensureOverlay() {
-  if (document.getElementById("sf-example-overlay")) return;
+  if (document.getElementById("sf-companion-overlay")) return;
   var wrap = document.createElement("div");
-  wrap.id = "sf-example-overlay";
+  wrap.id = "sf-companion-overlay";
   wrap.innerHTML =
-    '<div class="sf-ex-panel" role="dialog" aria-label="SandForge">' +
+    '<div class="sf-ex-panel" role="dialog" aria-label="SandForge Companion">' +
     '<div class="sf-ex-header">' +
-    '<div><div class="sf-ex-title-row"><h2 id="sf-ex-title">SandForge</h2>' +
+    '<div><div class="sf-ex-title-row"><h2 id="sf-ex-title">SandForge Companion</h2>' +
     '<span class="sf-ex-api-badge">API v1</span></div>' +
     '<p class="sf-ex-sub" id="sf-ex-sub"></p></div>' +
     '<button type="button" class="sf-ex-close" id="sf-ex-close" title="Close">✕</button>' +
@@ -304,7 +304,7 @@ function statCard(label, value, kind) {
 }
 
 function renderDocs(sectionId) {
-  var docs = window.SandforgeExampleDocs || [];
+  var docs = window.SandforgeCompanionDocs || [];
   var section = null;
   for (var i = 0; i < docs.length; i++) {
     if (docs[i].id === sectionId) {
@@ -472,14 +472,14 @@ function paintBody() {
 function collectStatus() {
   var sf = window.sandforge || window.sandforgeAPI || window.SandforgeGame;
   lastStatus.gameApi = !!(window.__SANDFORGE_GAME_API__ || window.SandforgeGame);
-  lastStatus.worker = !!(window.__SF_EXAMPLE_WORKER__);
+  lastStatus.worker = !!(window.__SF_COMPANION_WORKER__);
   lastStatus.version = (sf && sf.version) || lastStatus.version || "";
   if (!sf || typeof sf.invoke !== "function") {
     paintBody();
     return Promise.resolve(lastStatus);
   }
   return sf
-    .invoke("sandforge.example:status")
+    .invoke("sandustry.sandforge-companion:status")
     .then(function (ping) {
       if (!ping || !ping.ok) return lastStatus;
       lastStatus.electron = true;
@@ -508,7 +508,7 @@ function collectStatus() {
 
 function openPanel() {
   ensureOverlay();
-  var overlay = document.getElementById("sf-example-overlay");
+  var overlay = document.getElementById("sf-companion-overlay");
   if (!overlay) return;
   if (!isLoaderPresent()) panelTab = "status";
   paintTabs(isLoaderPresent());
@@ -519,7 +519,7 @@ function openPanel() {
 }
 
 function closePanel() {
-  var overlay = document.getElementById("sf-example-overlay");
+  var overlay = document.getElementById("sf-companion-overlay");
   if (overlay) overlay.classList.remove("open");
 }
 
@@ -554,13 +554,13 @@ function playEgg() {
   return false;
 }
 
-window.SandforgeExample = {
+window.SandforgeCompanion = {
   open: openPanel,
   close: closePanel,
   refresh: collectStatus,
   play: playEgg,
   markWorker: function () {
-    window.__SF_EXAMPLE_WORKER__ = true;
+    window.__SF_COMPANION_WORKER__ = true;
     collectStatus();
   },
 };
@@ -589,14 +589,14 @@ whenReady(function () {
       if (parts[2]) runSource(parts[2], "lib/solitaire.js");
     })
     .catch(function (e) {
-      console.warn("[sandforge.example] assets failed", e);
+      console.warn("[sandustry.sandforge-companion] assets failed", e);
     })
     .then(function () {
       try {
-        sandkit.api.ui.inject("sandforge-example-badge", StatusBadge);
+        sandkit.api.ui.inject("sandforge-companion-badge", StatusBadge);
       } catch (e) {
-        console.warn("[sandforge.example] badge inject failed", e);
+        console.warn("[sandustry.sandforge-companion] badge inject failed", e);
       }
-      console.log("[sandforge.example] ready", isLoaderPresent() ? "loader" : "sandkit-only");
+      console.log("[sandustry.sandforge-companion] ready", isLoaderPresent() ? "loader" : "sandkit-only");
     });
 });

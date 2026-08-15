@@ -6,6 +6,8 @@ SandForge is an unofficial mod loader for the Windows version of Sandustry. It
 keeps the normal Steam launch flow while giving mods access to the Electron
 main process, game renderer, simulation workers, and a shared runtime API.
 
+**Version:** 1.0.0 · **Platform:** Windows
+
 > SandForge is a community project. It is not affiliated with Sandustry,
 > its developers, or Steam.
 
@@ -20,7 +22,9 @@ main process, game renderer, simulation workers, and a shared runtime API.
 
 ## Installation
 
-SandForge currently supports Windows only.
+SandForge currently supports Windows only. Choose a permanent folder before
+installing: Sandustry links to that folder and the loader will stop working if
+it is moved or deleted.
 
 1. [Download the repository](https://github.com/InfinityTheHoly/sandforge-loader/archive/refs/heads/main.zip)
    and extract it to a permanent folder.
@@ -28,15 +32,14 @@ SandForge currently supports Windows only.
 3. Run `install.cmd`. Windows may ask for Administrator permission.
 4. Launch Sandustry normally through Steam.
 
-Do not move or delete the SandForge folder after installation—the game points
-to that folder while the loader is installed.
-
 The installer preserves the original game archive in
 `resources\vanilla\app.asar`. It does not modify that archive.
 
 ### Updating
 
-Replace the loader files with the new version, then run `install.cmd` again.
+Back up `%AppData%\sandustry\loader-config.json` and any local mods you want to
+keep. Replace the loader files with the new version, then run `install.cmd`
+again.
 Steam updates and file verification may restore the original `app.asar`; if
 SandForge stops loading afterward, rerun the installer.
 
@@ -52,7 +55,7 @@ SandForge discovers mods from both Steam Workshop and the local mods folder:
 | Source | Location |
 | --- | --- |
 | Steam Workshop | `steamapps\workshop\content\2764460\<itemId>\` |
-| Local mods | `%AppData%\Roaming\sandustry\mods\<folder>\` |
+| Local mods | `%AppData%\sandustry\mods\<folder>\` |
 
 Each mod is a folder containing a `modinfo.json` file. If a local mod and a
 Workshop mod use the same `id` or `modID`, the local copy takes priority.
@@ -76,7 +79,7 @@ SandForge adds optional entrypoints for code that needs deeper access:
 
 Start with the [modding guide](docs/MODDING.md), browse the
 [API reference](docs/API.md), or copy
-[`examples/sandforge-example`](examples/sandforge-example) into your local
+[`examples/sandforge-companion`](examples/sandforge-companion) into your local
 mods folder. TypeScript declarations are available in
 [`types/sandforge.d.ts`](types/sandforge.d.ts).
 
@@ -92,7 +95,7 @@ itself.**
 Loader settings are stored in:
 
 ```text
-%AppData%\Roaming\sandustry\loader-config.json
+%AppData%\sandustry\loader-config.json
 ```
 
 Example:
@@ -115,9 +118,9 @@ folder before launching the game; a path that does not exist is ignored.
 - Loader and Electron plugin `console.log` output appears in the game's
   Electron/Steam log
 - `api.logFile.write` writes to
-  `%AppData%\Roaming\sandustry\meta\sandforge-loader.log`
+  `%AppData%\sandustry\meta\sandforge-loader.log`
 - Boot diagnostics are written to
-  `%AppData%\Roaming\sandustry\meta\sandforge-boot.json`
+  `%AppData%\sandustry\meta\sandforge-boot.json`
 
 ## Troubleshooting
 
@@ -163,6 +166,13 @@ Steam still launches the original `Sandustry.exe`. The installer copies
 from its old location, and creates a junction from `resources\app` to the
 SandForge folder. The loader starts first, adds mod support, and then runs the
 preserved game archive.
+
+## Related projects
+
+- **SandForge Companion** (`sandustry.sandforge-companion`) reports loader
+  status in game and includes API documentation and an arcade.
+- **SandForge Toolkit** (`sandustry.sandforge-tk`) adds dedicated Mods and Maps
+  menus and an in-game map editor. It works without the loader.
 
 ## License
 

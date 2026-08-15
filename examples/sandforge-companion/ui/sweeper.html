@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Shaft Sweeper — SandForge</title>
+    <title>Shaft Sweeper — SandForge Companion</title>
     <style>
       html, body { margin: 0; height: 100%; background: #10140e; color: #d7e6d4; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
       .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
@@ -113,7 +113,7 @@
             wins += 1;
             var t = Math.max(1, Math.floor((Date.now() - started) / 1000));
             if (!best || t < best) best = t;
-            invoke("sandforge.example:arcade-score", { game: "sweeper", win: true, time: t }).catch(function () {});
+            invoke("sandustry.sandforge-companion:arcade-score", { game: "sweeper", win: true, time: t }).catch(function () {});
           }
         }
         function hit(mx, my) {
@@ -214,7 +214,7 @@
         (function boot(n) {
           var b = sf();
           if (b && b.invoke) {
-            invoke("sandforge.example:arcade-boot").then(function (s) {
+            invoke("sandustry.sandforge-companion:arcade-boot").then(function (s) {
               wins = (s && s.sweeperWins) || 0;
               best = (s && s.sweeperBest) || 0;
               hud();

@@ -1,15 +1,15 @@
 (function () {
   var api = self.sandforge || self.SandforgeWorker;
   if (api && api.log) api.log("info", "worker entry loaded " + api.version);
-  else console.log("[sandforge.example] worker entry loaded");
+  else console.log("[sandustry.sandforge-companion] worker entry loaded");
 
   function announce(attempt) {
     if (!api || typeof api.rpc !== "function") return;
     api
-      .rpc("registry", "set", ["sandforge.example", "workerReady", true])
+      .rpc("registry", "set", ["sandustry.sandforge-companion", "workerReady", true])
       .then(function () {
         if (typeof api.sendGameMessage === "function") {
-          return api.sendGameMessage("sandforge.example:worker", {
+          return api.sendGameMessage("sandustry.sandforge-companion:worker", {
             ok: true,
             at: Date.now(),
           });

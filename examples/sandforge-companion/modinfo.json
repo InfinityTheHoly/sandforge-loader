@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "sandustry.sandforge-companion",
+  "modID": "sandustry.sandforge-companion",
+  "name": "SandForge Companion",
+  "version": "1.3.0",
+  "apiVersion": 1,
+  "author": "InfinityTheHoly",
+  "description": "SandForge Companion is the Workshop companion for the SandForge loader. Official Sandkit can load this item on its own.\n\nWithout the loader: the main menu shows SandForge not active and a GitHub install link. Badge and docs still work.\n\nWith the loader: SandForge Active, live statuses, API docs, and an arcade (Vein Snake, Puddle Tank, Shaft Sweeper, Silt Sort, Klondike).\n\nThe loader is a local GitHub install. It is not on the Workshop and must not be uploaded.\nhttps://github.com/InfinityTheHoly/sandforge-loader\n\nSandForge Toolkit is a separate Workshop item. It does not require the loader.\n\nCreated by InfinityTheHoly. Unofficial. Not affiliated with Sandustry or its developers.",
+  "entry": "main.js",
+  "electronEntrypoint": "entry.electron.js",
+  "gameEntrypoint": "entry.game.js",
+  "workerEntrypoint": "entry.worker.js",
+  "loadOrder": 100
+}

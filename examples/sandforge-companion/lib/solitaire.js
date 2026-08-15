@@ -28,7 +28,7 @@
     if (pending) return Promise.resolve(true);
     pending = true;
     return sf
-      .invoke("sandforge.example:arcade-popout")
+      .invoke("sandustry.sandforge-companion:arcade-popout")
       .then(function (res) {
         pending = false;
         if (res && res.ok) {

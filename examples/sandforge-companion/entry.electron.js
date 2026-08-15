@@ -17,7 +17,7 @@ module.exports = function (api) {
       file: "ui/arcade.html",
       width: 760,
       height: 720,
-      title: "Arcade — SandForge",
+      title: "Arcade — SandForge Companion",
       backgroundColor: "#0a0c10",
       alwaysOnTop: true,
       maximizable: false,
@@ -28,16 +28,16 @@ module.exports = function (api) {
   }
 
   const handle = api.handle || api.handleGameIPC;
-  handle("sandforge.example:arcade-popout", openArcade);
+  handle("sandustry.sandforge-companion:arcade-popout", openArcade);
 
   const boots = (api.store.get("boots", 0) || 0) + 1;
   api.store.set("boots", boots);
   api.logFile.write(api.mod.id + " boot #" + boots);
 
-  api.registry.set("sandforge.example", "ready", true);
-  api.registry.set("sandforge.example", "boots", boots);
+  api.registry.set("sandustry.sandforge-companion", "ready", true);
+  api.registry.set("sandustry.sandforge-companion", "boots", boots);
 
-  handle("sandforge.example:status", function () {
+  handle("sandustry.sandforge-companion:status", function () {
     const mods = api.mods.list() || [];
     const enabled = mods.filter(function (m) {
       return m && m.enabled !== false;
@@ -56,7 +56,7 @@ module.exports = function (api) {
       mods: mods.length,
       enabled: enabled.length,
       electron: true,
-      worker: api.registry.get("sandforge.example", "workerReady", false) === true,
+      worker: api.registry.get("sandustry.sandforge-companion", "workerReady", false) === true,
       patcher: patcher,
       app: {
         version: api.app && api.app.version,
@@ -67,7 +67,7 @@ module.exports = function (api) {
     };
   });
 
-  handle("sandforge.example:ping", function () {
+  handle("sandustry.sandforge-companion:ping", function () {
     return { ok: true, loader: api.version, boots: boots };
   });
 
@@ -83,16 +83,16 @@ module.exports = function (api) {
     };
   }
 
-  handle("sandforge.example:arcade-boot", function () {
+  handle("sandustry.sandforge-companion:arcade-boot", function () {
     return Object.assign({ ok: true }, arcadeStats());
   });
 
-  handle("sandforge.example:solitaire-boot", function () {
+  handle("sandustry.sandforge-companion:solitaire-boot", function () {
     const s = arcadeStats();
     return { ok: true, wins: s.soloWins, bestTime: s.soloBestTime };
   });
 
-  handle("sandforge.example:arcade-score", function (row) {
+  handle("sandustry.sandforge-companion:arcade-score", function (row) {
     const data = row && typeof row === "object" ? row : { game: row };
     const game = String(data.game || "");
     const stats = arcadeStats();
@@ -123,7 +123,7 @@ module.exports = function (api) {
     return Object.assign({ ok: true }, stats);
   });
 
-  handle("sandforge.example:solitaire-win", function (time, moves) {
+  handle("sandustry.sandforge-companion:solitaire-win", function (time, moves) {
     const stats = arcadeStats();
     const t = Number(time) || 0;
     stats.soloWins += 1;

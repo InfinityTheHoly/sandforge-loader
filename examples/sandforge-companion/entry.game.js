@@ -1,30 +1,30 @@
 (function () {
   var api = window.sandforge || window.SandforgeGame;
   if (!api) {
-    console.warn("[sandforge.example] loader API missing");
+    console.warn("[sandustry.sandforge-companion] loader API missing");
     return;
   }
-  console.log("[sandforge.example] game entry loaded", api.version);
-  window.__SF_EXAMPLE_GAME__ = true;
+  console.log("[sandustry.sandforge-companion] game entry loaded", api.version);
+  window.__SF_COMPANION_GAME__ = true;
 
   function markWorkerReady() {
-    if (window.__SF_EXAMPLE_WORKER__) return;
-    window.__SF_EXAMPLE_WORKER__ = true;
-    if (window.SandforgeExample && window.SandforgeExample.markWorker) {
-      window.SandforgeExample.markWorker();
+    if (window.__SF_COMPANION_WORKER__) return;
+    window.__SF_COMPANION_WORKER__ = true;
+    if (window.SandforgeCompanion && window.SandforgeCompanion.markWorker) {
+      window.SandforgeCompanion.markWorker();
     }
   }
 
   if (api.workers && typeof api.workers.on === "function") {
     api.workers.on(function (channel) {
-      if (channel === "sandforge.example:worker") markWorkerReady();
+      if (channel === "sandustry.sandforge-companion:worker") markWorkerReady();
     });
   }
 
   function pollWorkerReady(attempt) {
     if (!api.registry || typeof api.registry.get !== "function") return;
     api.registry
-      .get("sandforge.example", "workerReady", false)
+      .get("sandustry.sandforge-companion", "workerReady", false)
       .then(function (ready) {
         if (ready) {
           markWorkerReady();
@@ -43,10 +43,10 @@
   pollWorkerReady(0);
 
   if (typeof api.invoke === "function") {
-    api.invoke("sandforge.example:status").catch(function () {});
+    api.invoke("sandustry.sandforge-companion:status").catch(function () {});
   }
 
-  if (window.SandforgeExample && typeof window.SandforgeExample.refresh === "function") {
-    window.SandforgeExample.refresh();
+  if (window.SandforgeCompanion && typeof window.SandforgeCompanion.refresh === "function") {
+    window.SandforgeCompanion.refresh();
   }
 })();

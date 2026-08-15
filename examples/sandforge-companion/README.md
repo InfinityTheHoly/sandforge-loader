@@ -1,6 +1,6 @@
-# SandForge
+# SandForge Companion
 
-Copy this folder to `%AppData%\Roaming\sandustry\mods\sandforge-example` (or upload it to Workshop). Official Sandkit can load this item on its own.
+Copy this folder to `%AppData%\sandustry\mods\sandforge-companion` (or upload it to Workshop). SandForge Companion can load through official Sandkit on its own.
 
 - **Without the loader** — main menu shows **SandForge not active** and a GitHub link. Badge and docs still work.
 - **With the loader** — **SandForge Active**, live statuses, API docs, and Ctrl-click the badge (or Arcade in the panel) to open a **select menu**: Vein Snake, Puddle Tank, Shaft Sweeper, Silt Sort, and Klondike. Scores are stored by the loader.

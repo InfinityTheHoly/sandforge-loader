@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Vein Snake — SandForge</title>
+    <title>Vein Snake — SandForge Companion</title>
     <style>
       html, body { margin: 0; height: 100%; background: #140e0a; color: #e8dcc8; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
       .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
@@ -84,7 +84,7 @@
         function persistBest() {
           if (score <= best) return;
           best = score;
-          invoke("sandforge.example:arcade-score", { game: "snake", score: best }).catch(function () {});
+          invoke("sandustry.sandforge-companion:arcade-score", { game: "snake", score: best }).catch(function () {});
         }
         function die() {
           if (!alive) return;
@@ -172,7 +172,7 @@
         (function boot(n) {
           var b = sf();
           if (b && b.invoke) {
-            invoke("sandforge.example:arcade-boot").then(function (s) {
+            invoke("sandustry.sandforge-companion:arcade-boot").then(function (s) {
               best = (s && s.snakeBest) || 0;
               hud();
             }).catch(function () {});

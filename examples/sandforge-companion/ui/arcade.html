@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Arcade — SandForge</title>
+    <title>Arcade — SandForge Companion</title>
     <style>
       html,
       body {
@@ -84,7 +84,7 @@
   <body>
     <div class="wrap">
       <div class="top">
-        <h1>SandForge Arcade</h1>
+        <h1>SandForge Companion Arcade</h1>
         <p>Pick a game. Esc closes the window. Scores are stored by the loader.</p>
       </div>
       <div class="grid" id="grid"></div>
@@ -173,7 +173,7 @@
         function boot(tries) {
           var b = sf();
           if (b && typeof b.invoke === "function") {
-            b.invoke("sandforge.example:arcade-boot")
+            b.invoke("sandustry.sandforge-companion:arcade-boot")
               .then(paint)
               .catch(function () {
                 paint({});

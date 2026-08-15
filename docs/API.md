@@ -50,7 +50,7 @@ Jump to [Electron](#electron-entryelectronjs),
 | Loader RPC | `api.rpc(ns, method, args)` (workers). Game: same, or `api.invoke` for your own channels. |
 | Patch | `api.patcher.add({ id, file, find, replace, expect })` or `anvil.json` |
 
-**Electron plugins have full Node.** `api.fs`, `api.shell`, and `api.net` are sandboxed to local mods, Workshop folders, `%AppData%\Roaming\sandustry`, and the loader directory. Network is http/https only (8 MB GET, 32 MB download). Game-world copies of those methods go through IPC and are async.
+**Electron plugins have full Node.** `api.fs`, `api.shell`, and `api.net` are sandboxed to local mods, Workshop folders, `%AppData%\sandustry`, and the loader directory. Network is http/https only (8 MB GET, 32 MB download). Game-world copies of those methods go through IPC and are async.
 
 Loader errors are `SandforgeError` instances with an `err.code` value:
 `PATCH_SEALED`, `PATCH_NEEDS_FIND`, `MATCH_COUNT`, `PATH_DENIED`,
@@ -94,7 +94,7 @@ identity fields plus the configured `maxMapDimension`.
 
 `loader`, `game`, `asar`, `ui`, `mods`, `data`, `workshop`, `saves`, `maps`, `meta`, `store`, `steamAppId`, `get()`.
 
-`workshop` is an array of roots. `saves` / `maps` / `meta` / `store` are under `%AppData%\Roaming\sandustry`.
+`workshop` is an array of roots. `saves` / `maps` / `meta` / `store` are under `%AppData%\sandustry`.
 `get()` returns the portable subset: `loader`, `game`, `asar`, `ui`, `mods`,
 `data`, `workshop`, and `steamAppId`.
 
@@ -107,7 +107,7 @@ Relative paths resolve under the local mods folder. Absolute paths must stay ins
 
 ### `api.store`
 
-Per-mod JSON at `%AppData%\Roaming\sandustry\mod-store\<id>.json`.
+Per-mod JSON at `%AppData%\sandustry\mod-store\<id>.json`.
 
 `get(key, fallback)`, `get()` whole object, `set(key, value)`, `set(object)`, `remove(key)`, `clear()`.
 
@@ -116,7 +116,7 @@ Bulk `set(object)` is available in Electron. The game IPC facade uses
 
 ### `api.settings`
 
-`schema()` from `modinfo.json` `configSchema`, `get()`, `set(obj)`, `patch(partial)`. Files: `%AppData%\Roaming\sandustry\mods\config\<id>.json` (same as `api.modConfig`).
+`schema()` from `modinfo.json` `configSchema`, `get()`, `set(obj)`, `patch(partial)`. Files: `%AppData%\sandustry\mods\config\<id>.json` (same as `api.modConfig`).
 
 ### `api.mods`
 
@@ -164,7 +164,7 @@ JSON: `anvil.json` or `sandforge-patches.json` in the mod folder. See [MODDING.m
 | `preload.js` | Applied to the extracted stock preload (`stock-preload.patched.js`). Loader `preload-chain.js` still runs. Call `patcher.applyPreload()` after late adds, then `windows.reload()`. |
 | Binary asar assets | `{ "file": "img/foo.png", "operation": "asset", "from": "override/foo.png" }` in `anvil.json` — served from the mod folder |
 
-`read` / `preview` / `dump` use the **original** asar bytes. `dump` writes `%AppData%\Roaming\sandustry\meta\sandforge-patch-dump\`.
+`read` / `preview` / `dump` use the **original** asar bytes. `dump` writes `%AppData%\sandustry\meta\sandforge-patch-dump\`.
 
 ### `api.windows`
 
@@ -232,7 +232,7 @@ Uses the game’s `steamworks.js`. Item ids are strings. No Workshop upload.
 
 ### `api.logFile`
 
-`write(line)` → `%AppData%\Roaming\sandustry\meta\sandforge-loader.log`.
+`write(line)` → `%AppData%\sandustry\meta\sandforge-loader.log`.
 
 ### `api.bus`
 
@@ -455,7 +455,7 @@ The game window is `sandforge-ui://game/…`. Chromium blocks `file://` from tha
 | `sandforge://<modId>/path` | that mod's folder |
 | `sandforge://mod/<modId>/path` | same |
 | `sandforge://mods/<modId>/path` | same |
-| `sandforge://data/…` | `%AppData%\Roaming\sandustry\…` |
+| `sandforge://data/…` | `%AppData%\sandustry\…` |
 | `sandforge://loader/…` | loader folder |
 
 No `..`. Host can be the mod id, folder name, or Workshop item id. `fetch` and `<img src>` work. Dedicated `Worker` scripts should be loaded with `fetch(api.assets.url(rel))` or `api.mods.read` and a blob URL — Chromium often blocks `new Worker("file.js")` on custom schemes even when the HTML itself is `sandforge://`.

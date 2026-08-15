@@ -2,7 +2,7 @@
  * In-game SandForge API reference (shown when the loader is active).
  */
 (function (root) {
-  root.SandforgeExampleDocs = [
+  root.SandforgeCompanionDocs = [
     {
       id: "electron",
       label: "Electron",

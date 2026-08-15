@@ -3,12 +3,12 @@
 Workshop items and local mods use the same layout. Official Sandkit fields still work. Extra fields unlock full control **only when this loader is installed**.
 
 Full method list: [API.md](API.md). Complete example:
-[`examples/sandforge-example`](../examples/sandforge-example/README.md).
+[`examples/sandforge-companion`](../examples/sandforge-companion/README.md).
 
 ## Quick start
 
 Create a folder under
-`%AppData%\Roaming\sandustry\mods\author.my-mod\` with these two files:
+`%AppData%\sandustry\mods\author.my-mod\` with these two files:
 
 ```text
 author.my-mod/
@@ -135,7 +135,7 @@ The loader is **not** a Workshop item. Workshop mods must keep working in offici
 - Map-only packs (`map` in `modinfo.json`, no `entry`) belong in **Maps**, not **Mods**. Code mods stay in Mods. Hybrids can appear in both.
 - [Download the loader](https://github.com/InfinityTheHoly/sandforge-loader)
 
-Companion Workshop items: **SandForge** (`sandforge.example`) for status/docs, **SandForge Toolkit** (`sandustry.sandforge-tk`) for menus and the editor.
+Companion Workshop items: **SandForge Companion** (`sandustry.sandforge-companion`) for status/docs, **SandForge Toolkit** (`sandustry.sandforge-tk`) for menus and the editor.
 
 ## Assets in the game page (`file://` vs `sandforge://`)
 
@@ -248,7 +248,7 @@ If the actual match count does not satisfy `expect`, that patch is skipped and
 the mismatch is written to the Electron console. The rest of the mod continues
 loading. Use `api.patcher.status()` to inspect results and
 `api.patcher.dump(file)` to write the patched source under
-`%AppData%\Roaming\sandustry\meta\sandforge-patch-dump\`.
+`%AppData%\sandustry\meta\sandforge-patch-dump\`.
 
 Official Sandkit `patches.json` is unchanged and still `js/*.js` only.
 
@@ -305,8 +305,8 @@ lifecycle event bus.
 
 | What | Where |
 | --- | --- |
-| Per-mod settings | `%AppData%\Roaming\sandustry\mods\config\<id>.json` (`api.settings` / `api.modConfig`) |
-| Per-mod store | `%AppData%\Roaming\sandustry\mod-store\<id>.json` |
+| Per-mod settings | `%AppData%\sandustry\mods\config\<id>.json` (`api.settings` / `api.modConfig`) |
+| Per-mod store | `%AppData%\sandustry\mod-store\<id>.json` |
 | Disable a mod | `loader-config.json` → `"disabled": ["author.my-mod"]` |
 
 ## Reloading during development

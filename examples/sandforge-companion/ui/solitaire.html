@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Solitaire — SandForge</title>
+    <title>Solitaire — SandForge Companion</title>
     <style>
       html,
       body {
@@ -259,7 +259,7 @@
           if (foundations.every(function (p) { return p.length === 13; })) {
             won = true;
             var elapsed = Math.floor((Date.now() - started) / 1000) || 1;
-            invoke("sandforge.example:solitaire-win", elapsed, moves).then(function (res) {
+            invoke("sandustry.sandforge-companion:solitaire-win", elapsed, moves).then(function (res) {
               if (res && res.wins != null) wins = res.wins;
               if (res && res.bestTime) bestTime = res.bestTime;
               hud();
@@ -585,7 +585,7 @@
 
         function boot(tries) {
           if (sf() && typeof sf().invoke === "function") {
-            invoke("sandforge.example:solitaire-boot")
+            invoke("sandustry.sandforge-companion:solitaire-boot")
               .then(function (res) {
                 wins = (res && res.wins) || 0;
                 bestTime = (res && res.bestTime) || 0;

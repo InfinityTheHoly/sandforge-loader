@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Silt Sort — SandForge</title>
+    <title>Silt Sort — SandForge Companion</title>
     <style>
       html, body { margin: 0; height: 100%; background: #12100c; color: #e8dcc8; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
       .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
@@ -92,7 +92,7 @@
           if (tubes.every(function (t) { return !t.length || (t.length === CAP && t.every(function (c) { return c === t[0]; })); })) {
             won = true;
             wins += 1;
-            invoke("sandforge.example:arcade-score", {
+            invoke("sandustry.sandforge-companion:arcade-score", {
               game: "sort",
               win: true,
               time: Math.max(1, Math.floor((Date.now() - started) / 1000)),
@@ -167,7 +167,7 @@
         (function boot(n) {
           var b = sf();
           if (b && b.invoke) {
-            invoke("sandforge.example:arcade-boot").then(function (s) {
+            invoke("sandustry.sandforge-companion:arcade-boot").then(function (s) {
               wins = (s && s.sortWins) || 0;
               hud();
             }).catch(function () {});
