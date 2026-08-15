@@ -11,7 +11,7 @@
         {
           title: "Identity",
           items: [
-            { name: "api.version / api.apiVersion", desc: "Loader version string (\"1.0.0\")." },
+            { name: "api.version / api.apiVersion", desc: "Current loader and API versions." },
             { name: "api.environment", desc: "\"electron\"." },
             { name: "api.modId / api.mod", desc: "This mod's id and { id, name, version, author, dir, source, workshopId }." },
             { name: "api.log(level, message)", desc: "Console (optional tag as second arg)." },
@@ -21,7 +21,7 @@
         {
           title: "App / paths",
           items: [
-            { name: "api.app", desc: "version, platform, arch, electron, chrome, node, pid, relaunch(), quit()." },
+            { name: "api.app", desc: "version, platform, arch, electron, chrome, node, pid, maxMapDimension, relaunch(), quit()." },
             { name: "api.paths", desc: "loader, game, asar, ui, mods, data, workshop, saves, steamAppId." },
           ],
         },
@@ -96,9 +96,10 @@
           items: [
             { name: "api.bind(modId)", desc: "Copy whose store/settings/assets stay on that id. Capture const api = window.sandforge in the entry." },
             { name: "api.invoke(channel, …args)", desc: "Calls Electron api.handle." },
-            { name: "api.on(channel, fn)", desc: "Electron sendGameEvent / bus.emit." },
+            { name: "api.on(channel, fn)", desc: "Messages broadcast from Electron with api.emit / sendGameEvent." },
+            { name: "api.events.on(name, fn)", desc: "Renderer-local loader lifecycle events." },
             { name: "api.fs / store / mods / paths.get()", desc: "Same names as Electron, all Promises." },
-            { name: "api.app.info() / api.relaunch()", desc: "Loader info and F6-style relaunch." },
+            { name: "api.app.info() / api.relaunch()", desc: "Loader info, configured maxMapDimension, and F6-style relaunch." },
             { name: "api.patcher.status()", desc: "Queued Anvil patches." },
             { name: "api.shell.openUrl(url)", desc: "Open http/https in the system browser." },
           ],
@@ -120,10 +121,13 @@
         {
           title: "Surface",
           items: [
-            { name: "api.version / api.environment", desc: "\"1.0.0\" / \"worker\"." },
+            { name: "api.version / api.environment", desc: "Current loader version / \"worker\"." },
             { name: "api.sandkit / api.api", desc: "Worker Sandkit when present." },
-            { name: "api.on / emit", desc: "Listen / post { __sf: 1, channel, payload }. sendGameMessage is an alias of emit." },
+            { name: "api.on / off / once", desc: "Listen for SandForge worker channels. listenGameMessage is an alias of on." },
+            { name: "api.emit / sendGameMessage", desc: "Post a channel and payload back to the game renderer." },
             { name: "api.rpc(ns, method, args)", desc: "Loader RPC. api.dispatch is an alias. api.api is Sandkit, not RPC." },
+            { name: "api.fs", desc: "Async exists, readText, readJson, write, writeJson, list, mkdir, remove, copy, and hash." },
+            { name: "api.net.request(opts)", desc: "Async loader-backed HTTP request." },
             { name: "api.log / api.now / api.util", desc: "log(level, message), clamp, lerp." },
           ],
         },

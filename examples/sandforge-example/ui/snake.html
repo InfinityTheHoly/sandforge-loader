@@ -81,13 +81,15 @@
           placeFood();
           hud();
         }
+        function persistBest() {
+          if (score <= best) return;
+          best = score;
+          invoke("sandforge.example:arcade-score", { game: "snake", score: best }).catch(function () {});
+        }
         function die() {
           if (!alive) return;
           alive = false;
-          if (score > best) {
-            best = score;
-            invoke("sandforge.example:arcade-score", { game: "snake", score: best }).catch(function () {});
-          }
+          persistBest();
           hud();
         }
         function step() {
@@ -101,6 +103,7 @@
           snake.unshift(head);
           if (head.x === food.x && head.y === food.y) {
             score += food.pts;
+            persistBest();
             speed = Math.min(14, speed + 0.12);
             placeFood();
             hud();

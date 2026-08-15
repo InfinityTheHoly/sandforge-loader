@@ -11,7 +11,7 @@
   } catch (_) {}
 
   var VERSION = "1.0.0";
-  var GITHUB_URL = "https://github.com/sandforge/sandforge-loader";
+  var GITHUB_URL = "https://github.com/InfinityTheHoly/sandforge-loader";
   var listeners = {};
   var commands = {};
   var tickers = [];
@@ -494,14 +494,20 @@
   var workers = {
     reload: function () { return call("workers", "reload", []); },
     on: function (fn) {
+      if (typeof fn !== "function") return function () {};
       function handler(ev) {
         var data = ev && ev.data;
         if (!data || data.__sf !== 1) return;
         fn(data.channel, data.payload);
       }
+      var offBus = onEvent("sf:worker-message", function (data) {
+        if (!data || data.__sf !== 1) return;
+        fn(data.channel, data.payload);
+      });
       window.addEventListener("message", handler);
       return function () {
         window.removeEventListener("message", handler);
+        offBus();
       };
     },
   };

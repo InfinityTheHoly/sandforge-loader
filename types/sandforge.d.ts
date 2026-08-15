@@ -12,14 +12,21 @@ export interface SandforgeModInfo {
   workshopId?: string | null;
   enabled?: boolean;
   depends?: string[];
-  electronEntrypoint?: boolean;
-  gameEntrypoint?: boolean;
-  workerEntrypoint?: boolean;
+  electronEntrypoint?: string | boolean;
+  gameEntrypoint?: string | boolean;
+  workerEntrypoint?: string | boolean;
+  workerEntrypoints?: {
+    both?: string;
+    manager?: string;
+    simulation?: string;
+  };
   info?: Record<string, unknown>;
 }
 
 export interface SandforgeWindowCreateOpts {
-  file: string;
+  file?: string;
+  path?: string;
+  html?: string;
   width?: number;
   height?: number;
   title?: string;
@@ -28,8 +35,10 @@ export interface SandforgeWindowCreateOpts {
   parent?: boolean | number;
   backgroundColor?: string;
   maximizable?: boolean;
+  minimizable?: boolean;
   fullscreenable?: boolean;
   resizable?: boolean;
+  autoHideMenuBar?: boolean;
   injectGame?: boolean;
   modId?: string;
 }
@@ -39,6 +48,12 @@ export interface SandforgeRect {
   y: number;
   width: number;
   height: number;
+}
+
+export interface SandforgeDirEntry {
+  name: string;
+  isDirectory: boolean;
+  isFile: boolean;
 }
 
 export interface SandforgeWs {
@@ -85,6 +100,7 @@ export interface SandforgeSettings {
 }
 
 export interface SandforgeFs {
+  resolve(rel: string): string;
   exists(rel: string): boolean;
   stat(rel: string): object;
   readText(rel: string): string;
@@ -96,8 +112,35 @@ export interface SandforgeFs {
   mkdir(rel: string): unknown;
   remove(rel: string): unknown;
   copy(from: string, to: string): unknown;
-  list(rel?: string): string[];
+  list(rel?: string): SandforgeDirEntry[];
   hash(rel: string, algo?: string): string;
+}
+
+export interface SandforgeEvents {
+  on(channel: string, fn: (data?: unknown) => void): void;
+  off(channel: string, fn: (data?: unknown) => void): void;
+  once(channel: string, fn: (data?: unknown) => void): () => void;
+  trigger(channel: string, data?: unknown): Promise<void>;
+  emit(channel: string, data?: unknown): Promise<void>;
+}
+
+export interface SandforgeBus {
+  on(channel: string, fn: (data?: unknown) => void): () => void;
+  off(channel: string, fn: (data?: unknown) => void): void;
+  once(channel: string, fn: (data?: unknown) => void): () => void;
+  emit(channel: string, data?: unknown): number;
+  channels(): string[];
+}
+
+export interface SandforgeRegistry {
+  set(ns: string, key: string, value: unknown): unknown;
+  get(ns: string, key: string, fallback?: unknown): unknown;
+  has(ns: string, key: string): boolean;
+  remove(ns: string, key: string): unknown;
+  list(ns: string): Array<{ key: string; value: unknown }>;
+  keys(ns: string): string[];
+  clear(ns: string): unknown;
+  namespaces(): string[];
 }
 
 export type SandforgeAsync<T> = {
@@ -122,20 +165,51 @@ export interface SandforgeMods {
   setDisabled?(ids: string[]): unknown;
 }
 
+export interface SandforgeFluentPatch {
+  id(value: string): SandforgeFluentPatch;
+  find(text: string): SandforgeFluentPatch;
+  regex(pattern: string, flags?: string): SandforgeFluentPatch;
+  prefix(code: string): SandforgeFluentPatch;
+  postfix(code: string): SandforgeFluentPatch;
+  bodyPrefix(code: string): SandforgeFluentPatch;
+  replace(text: string): SandforgeFluentPatch;
+  wrap(before: string, after: string): SandforgeFluentPatch;
+  remove(): SandforgeFluentPatch;
+  expect(n: number | "any"): SandforgeFluentPatch;
+  occurrence(value: number | "all"): SandforgeFluentPatch;
+  atomic(value: string): SandforgeFluentPatch;
+  priority(value: number): SandforgeFluentPatch;
+  phase(value: "early" | "late"): SandforgeFluentPatch;
+  apply(): string;
+}
+
 export interface SandforgePatcher {
   add(patch: SandforgePatch): string;
+  set(patch: SandforgePatch): string;
   replace(file: string, find: string, code: string, opts?: object): string;
+  prefix(file: string, find: string, code: string, opts?: object): string;
+  postfix(file: string, find: string, code: string, opts?: object): string;
+  bodyPrefix(file: string, find: string, code: string, opts?: object): string;
+  transpiler(file: string, find: string, code: string, opts?: object): string;
+  wrap(file: string, find: string, parts: { before?: string; after?: string }, opts?: object): string;
+  remove(file: string, find: string, opts?: object): string;
+  transform(file: string, fn: (source: string) => string, opts?: object): string;
+  addPatch(file: string, patch: object): string;
+  setPatch(file: string, tag: string, patch: object): string;
+  removePatch(file: string, tag: string): void;
+  patchExists(file: string, tag: string): boolean;
+  addMappedPatch(fileMap: object, mapFn: (...args: unknown[]) => object | object[]): string;
+  setMappedPatch(fileMap: object, tag: string, mapFn: (...args: unknown[]) => object | object[]): string;
   unpatch(id: string): void;
   unseal(): void;
   isSealed(): boolean;
+  read(file: string): string;
+  preview(file: string, find?: string, context?: number): unknown;
+  dump(file: string): string;
+  list(): object[];
   status(): object;
   applyPreload(): string;
-  file?(path: string): {
-    find(text: string): unknown;
-    replace(text: string): unknown;
-    expect(n: number): unknown;
-    apply(): string;
-  };
+  file(path: string): SandforgeFluentPatch;
 }
 
 export interface SandforgeElectronApi {
@@ -149,7 +223,7 @@ export interface SandforgeElectronApi {
     read(rel: string): string;
     readJson(rel: string, fallback?: unknown): unknown;
     write(rel: string, data: string | Uint8Array): unknown;
-    list(rel?: string): string[];
+    list(rel?: string): SandforgeDirEntry[];
   };
   log(level: string, message: string): void;
   log(level: string, tag: string, message: string): void;
@@ -170,6 +244,7 @@ export interface SandforgeElectronApi {
     chrome: string;
     node: string;
     pid: number;
+    maxMapDimension: number;
     isPackaged: boolean;
     getLocale(): string;
     whenReady(): Promise<unknown>;
@@ -194,12 +269,27 @@ export interface SandforgeElectronApi {
   fs: SandforgeFs;
   store: SandforgeStore;
   settings: SandforgeSettings;
+  modConfig: {
+    get(modId?: string): unknown;
+    set(modId: string | object, value?: object): unknown;
+  };
   mods: SandforgeMods;
   listMods(): SandforgeModInfo[];
   getDisabled(): string[];
   disable(ids: string[]): unknown;
   /** @deprecated use disable */
   setDisabled(ids: string[]): unknown;
+  getModsPath(): string;
+  getGameBasePath(): string;
+  getGameAsarPath(): string;
+  getGameRoot(): string;
+  getTempBasePath(): string;
+  getTempExtractedPath(): string;
+  getUserDataPath(): string;
+  getAppPath(): string;
+  getInstalledMods(): object[];
+  getLoadedMods(): object[];
+  getEnabledMods(): object[];
   patcher: SandforgePatcher;
   windows: {
     create(opts: SandforgeWindowCreateOpts): { ok: boolean; id: number };
@@ -229,6 +319,8 @@ export interface SandforgeElectronApi {
   };
   steam: {
     appId: string;
+    workshopRoots: string[];
+    gameRoot: string;
     info(): object;
     subscribe(id: string | number): Promise<object>;
     unsubscribe(id: string | number): Promise<object>;
@@ -262,11 +354,60 @@ export interface SandforgeElectronApi {
     openUrl(url: string): unknown;
     showItemInFolder(target: string): unknown;
   };
-  events: {
-    on(channel: string, fn: (data?: unknown) => void): unknown;
-    off?(channel: string, fn: (data?: unknown) => void): unknown;
-    emit?(channel: string, data?: unknown): unknown;
+  crypto: {
+    randomId(): string;
+    hash(text: string, algo?: string): string;
+    hashFile(rel: string, algo?: string): string;
   };
+  time: {
+    now(): number;
+    iso(): string;
+    sleep(ms: number): Promise<void>;
+  };
+  tray: {
+    create(opts?: object): { ok: boolean };
+  };
+  saves: {
+    list(): string[];
+    maps(): string[];
+  };
+  logFile: {
+    write(line: string): void;
+  };
+  bus: SandforgeBus;
+  registry: SandforgeRegistry;
+  events: SandforgeEvents;
+  watch: {
+    dir(rel: string, fn: (event: { event: string; filename: string; dir: string }) => void): () => void;
+  };
+  screen: {
+    displays(): object[];
+    primary(): object | null;
+  };
+  shortcuts: {
+    register(accelerator: string, fn: () => void): boolean;
+    unregister(accelerator: string): void;
+    unregisterAll(): void;
+    isRegistered(accelerator: string): boolean;
+  };
+  images: {
+    fromFile(rel: string): Buffer;
+    fromPng(buf: Uint8Array): unknown;
+    resize(buf: Uint8Array, width: number, height: number): Buffer;
+    size(buf: Uint8Array): { width: number; height: number };
+  };
+  timers: {
+    timeout(ms: number, fn: () => void): unknown;
+    interval(ms: number, fn: () => void): unknown;
+    clear(id: unknown): void;
+  };
+  assets: {
+    url(rel: string): string;
+    fileUrl(rel: string): string;
+    read(rel: string): string;
+    readBinary(rel: string): Buffer;
+  };
+  util: Record<string, (...args: any[]) => any>;
   ipc: {
     handle(channel: string, handler: (...args: unknown[]) => unknown): void;
     emit(channel: string, data?: unknown): void;
@@ -308,6 +449,38 @@ export interface SandforgeGameApi {
     remove(id: string): void;
   };
   scene: { get(): unknown; onChange(fn: (now: unknown, prev: unknown) => void): () => void; isMenu(): boolean };
+  tick: {
+    every(ms: number, fn: () => void): () => void;
+    next(fn: () => void): unknown;
+    onFrame(fn: () => void): () => void;
+  };
+  hooks: {
+    intercept(id: string, fn: (...args: unknown[]) => unknown, opts?: object): unknown;
+    modify(id: string, fn: (...args: unknown[]) => unknown, opts?: object): unknown;
+  };
+  world: {
+    player(): unknown;
+    camera(): unknown;
+    cell(x: number, y: number): unknown;
+    setCell(x: number, y: number, value: unknown): unknown;
+    mouseCell(): unknown;
+  };
+  input: {
+    bind(id: string, keys: string | string[], handlers: object): unknown;
+    mouseCell(): unknown;
+    onKey(code: string, fn: (event: KeyboardEvent) => void): () => void;
+  };
+  i18n: {
+    add(key: string, value: string, locale?: string): unknown;
+    t(key: string, fallback?: string): string;
+  };
+  audio: {
+    play(src: string, opts?: { volume?: number; loop?: boolean }): HTMLAudioElement;
+  };
+  events: {
+    on(channel: string, fn: (data?: unknown) => void): () => void;
+    emit(channel: string, data?: unknown): unknown;
+  };
   commands: {
     register(name: string, fn: (args: string[]) => unknown, help?: string): void;
     run(name: string, args?: string[]): unknown;
@@ -317,8 +490,16 @@ export interface SandforgeGameApi {
   settings: SandforgeAsync<SandforgeSettings> & {
     panel(id?: string): Promise<HTMLElement>;
   };
-  fs: SandforgeAsync<SandforgeFs>;
-  mods: SandforgeAsync<Pick<SandforgeMods, "list" | "disable" | "getDisabled" | "unload" | "reload" | "assetUrl" | "fileUrl" | "read">> & {
+  fs: SandforgeAsync<Omit<SandforgeFs, "resolve">>;
+  mods: {
+    list(): Promise<SandforgeModInfo[]>;
+    disable(ids: string[]): Promise<unknown>;
+    getDisabled(): Promise<string[]>;
+    unload(id?: string): Promise<unknown>;
+    reload(id?: string): Promise<unknown>;
+    assetUrl(modId: string, rel: string): string;
+    fileUrl(modId: string, rel: string): string;
+    read(modId: string, rel: string): Promise<string>;
     setDisabled(ids: string[]): Promise<unknown>;
   };
   listMods(): Promise<SandforgeModInfo[]>;
@@ -338,10 +519,44 @@ export interface SandforgeGameApi {
     post(url: string, body?: unknown, opts?: object): Promise<unknown>;
     getJson(url: string): Promise<unknown>;
     download(url: string, destRel: string): Promise<unknown>;
+    request(url: string, opts?: object): Promise<unknown>;
     ws(url: string, opts?: object): Promise<SandforgeWs>;
     [key: string]: unknown;
   };
-  steam: SandforgeAsync<SandforgeElectronApi["steam"]>;
+  dialog: SandforgeAsync<SandforgeElectronApi["dialog"]>;
+  clipboard: SandforgeAsync<SandforgeElectronApi["clipboard"]>;
+  shell: SandforgeAsync<SandforgeElectronApi["shell"]>;
+  notify: SandforgeAsync<SandforgeElectronApi["notify"]>;
+  screen: SandforgeAsync<SandforgeElectronApi["screen"]>;
+  saves: SandforgeAsync<SandforgeElectronApi["saves"]>;
+  crypto: SandforgeAsync<SandforgeElectronApi["crypto"]>;
+  registry: {
+    get(ns: string, key: string, fallback?: unknown): Promise<unknown>;
+    set(ns: string, key: string, value: unknown): Promise<unknown>;
+    list(ns: string): Promise<Array<{ key: string; value: unknown }>>;
+  };
+  bus: {
+    on(channel: string, fn: (data?: unknown) => void): () => void;
+    emit(channel: string, data?: unknown): Promise<unknown>;
+  };
+  logFile: {
+    write(line: string): Promise<unknown>;
+  };
+  app: {
+    info(): Promise<{
+      version: string;
+      platform: string;
+      pid: number;
+      electron: string;
+      maxMapDimension: number;
+    }>;
+    relaunch(): Promise<unknown>;
+    quit(): Promise<unknown>;
+  };
+  steam: SandforgeAsync<Omit<SandforgeElectronApi["steam"], "appId" | "workshopRoots" | "gameRoot">>;
+  paths: {
+    get(): Promise<object>;
+  };
   assets: {
     url(rel: string, modId?: string): string;
     image(rel: string, modId?: string): HTMLImageElement;
@@ -381,8 +596,17 @@ export interface SandforgeWorkerApi {
     list(rel: string): Promise<unknown>;
   };
   on(channel: string, fn: (payload: unknown) => void): () => void;
-  emit(channel: string, payload?: unknown): void;
-  sendGameMessage(channel: string, payload?: unknown): void;
+  off(channel: string, fn: (payload: unknown) => void): void;
+  once(channel: string, fn: (payload: unknown) => void): () => void;
+  listenGameMessage(channel: string, fn: (payload: unknown) => void): () => void;
+  emit(channel: string, payload?: unknown): Promise<unknown>;
+  sendGameMessage(channel: string, payload?: unknown): Promise<unknown>;
+  log(level: string, message: string): void;
+  now(): number;
+  util: {
+    clamp(n: number, min: number, max: number): number;
+    lerp(a: number, b: number, t: number): number;
+  };
   sandkit: unknown;
 }
 
@@ -399,8 +623,16 @@ declare global {
     sandforge: SandforgeGameApi;
     sandforgeAPI: SandforgeGameApi;
     SandforgeGame: SandforgeGameApi;
+    sandforgeGame: SandforgeGameApi;
     SandforgeLoader: SandforgeLoaderDetect;
     __SF_HOST__?: { loader: true; version: string };
+    __SANDFORGE_LOADER__?: { loader: true; version: string };
+    __SF_DISABLED__?: string[];
+  }
+  interface WorkerGlobalScope {
+    sandforge: SandforgeWorkerApi;
+    sandforgeAPI: SandforgeWorkerApi;
+    SandforgeWorker: SandforgeWorkerApi;
   }
   // eslint-disable-next-line no-var
   var sandforge: SandforgeApi | undefined;

@@ -144,7 +144,7 @@ if (!paths.gameRoot || !paths.gameAsar || !fs.existsSync(paths.gameAsar)) {
     );
     injectWorkerEntrypoints(patcher, loader.workerEntrypoints(), workerApi);
     const hostBoot =
-      ";(function(){try{window.__SF_HOST__={loader:true,version:'1.0.0'};window.__SANDFORGE_LOADER__=window.__SF_HOST__;window.SandforgeLoader=window.SandforgeLoader||{};window.SandforgeLoader.has=function(){return true;};window.SandforgeLoader.GITHUB_URL=window.SandforgeLoader.GITHUB_URL||'https://github.com/sandforge/sandforge-loader';}catch(e){}})();\n";
+      ";(function(){try{window.__SF_HOST__={loader:true,version:'1.0.0'};window.__SANDFORGE_LOADER__=window.__SF_HOST__;window.SandforgeLoader=window.SandforgeLoader||{};window.SandforgeLoader.has=function(){return true;};window.SandforgeLoader.GITHUB_URL=window.SandforgeLoader.GITHUB_URL||'https://github.com/InfinityTheHoly/sandforge-loader';}catch(e){}})();\n";
     patcher.addTransform(
       "js/bundle.js",
       (src) => {
@@ -163,7 +163,7 @@ if (!paths.gameRoot || !paths.gameAsar || !fs.existsSync(paths.gameAsar)) {
       (src) =>
         String(src).replace(
           "<head>",
-          "<head><script>window.__SF_HOST__={loader:true,version:'1.0.0'};window.__SANDFORGE_LOADER__=window.__SF_HOST__;window.SandforgeLoader=window.SandforgeLoader||{};window.SandforgeLoader.has=function(){return true;};window.SandforgeLoader.GITHUB_URL=window.SandforgeLoader.GITHUB_URL||'https://github.com/sandforge/sandforge-loader';</script>",
+          "<head><script>window.__SF_HOST__={loader:true,version:'1.0.0'};window.__SANDFORGE_LOADER__=window.__SF_HOST__;window.SandforgeLoader=window.SandforgeLoader||{};window.SandforgeLoader.has=function(){return true;};window.SandforgeLoader.GITHUB_URL=window.SandforgeLoader.GITHUB_URL||'https://github.com/InfinityTheHoly/sandforge-loader';</script>",
         ),
       { id: "sandforge-loader:host-flag", phase: "early" },
       "sandforge-loader",

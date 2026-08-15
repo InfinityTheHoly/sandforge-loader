@@ -1,5 +1,6 @@
 const MOD_ID = "sandforge.example";
-const GITHUB_URL = "https://github.com/sandforge/sandforge-loader";
+const GITHUB_URL = "https://github.com/InfinityTheHoly/sandforge-loader";
+const AUTHOR_URL = "https://github.com/InfinityTheHoly";
 
 try {
   if (typeof sandkit !== "undefined") window.sandkit = sandkit;
@@ -76,7 +77,8 @@ function runSource(code, label) {
 function looksLikeLoader(sf) {
   if (!sf) return false;
   try {
-    if (sf.isWrapper || sf.isLoader) return true;
+    if (sf.isWrapper === true || sf.isLoader === true) return true;
+    if (typeof sf.isLoader === "function" && sf.isLoader()) return true;
     if (typeof sf.setDisabled === "function") return true;
     if (typeof sf.getDisabled === "function") return true;
     if (typeof sf.relaunch === "function") return true;
@@ -140,8 +142,7 @@ function isMainMenuScene() {
   return !!document.querySelector(".w-60.relative.group.cursor-pointer");
 }
 
-function openGithub() {
-  var url = GITHUB_URL;
+function openExternal(url) {
   try {
     if (window.electron && typeof window.electron.openExternalBrowser === "function") {
       window.electron.openExternalBrowser(url);
@@ -165,6 +166,14 @@ function openGithub() {
   try {
     window.open(url, "_blank");
   } catch (_) {}
+}
+
+function openGithub() {
+  openExternal(GITHUB_URL);
+}
+
+function openAuthor() {
+  openExternal(AUTHOR_URL);
 }
 
 function escapeHtml(s) {
@@ -266,7 +275,9 @@ function ensureOverlay() {
   wrap.innerHTML =
     '<div class="sf-ex-panel" role="dialog" aria-label="SandForge">' +
     '<div class="sf-ex-header">' +
-    "<div><h2 id=\"sf-ex-title\">SandForge</h2><p class=\"sf-ex-sub\" id=\"sf-ex-sub\"></p></div>" +
+    '<div><div class="sf-ex-title-row"><h2 id="sf-ex-title">SandForge</h2>' +
+    '<span class="sf-ex-api-badge">API v1</span></div>' +
+    '<p class="sf-ex-sub" id="sf-ex-sub"></p></div>' +
     '<button type="button" class="sf-ex-close" id="sf-ex-close" title="Close">✕</button>' +
     "</div>" +
     '<div class="sf-ex-tabs" id="sf-ex-tabs"></div>' +
@@ -327,7 +338,8 @@ function renderInactive() {
     '<div class="sf-ex-item"><p>This badge, this panel, and the GitHub link. Ctrl-click Arcade needs the loader.</p></div></div>' +
     '<div class="sf-ex-group"><h3>Ecosystem</h3>' +
     '<div class="sf-ex-item"><p><strong>SandForge Toolkit</strong> is a separate Workshop item. It does not require the loader. It hijacks Mods and Maps (code mods vs map packs) and prompts when the loader is required or would just make a feature better.</p></div>' +
-    '<div class="sf-ex-item"><p>Workshop mods should keep working in Sandkit. Detect <code>window.SandforgeLoader.has()</code> or <code>window.__SF_HOST__</code>, then degrade and link here.</p></div></div>'
+    '<div class="sf-ex-item"><p>Workshop mods should keep working in Sandkit. Detect <code>window.SandforgeLoader.has()</code> or <code>window.__SF_HOST__</code>, then degrade and link here.</p></div>' +
+    '<div class="sf-ex-item"><p>Created and maintained by <strong>InfinityTheHoly</strong>.</p></div></div>'
   );
 }
 
@@ -398,11 +410,14 @@ function paintFooter(active) {
   var footer = document.getElementById("sf-ex-footer");
   if (!footer) return;
   footer.innerHTML =
-    '<button type="button" class="sf-ex-btn" id="sf-ex-github">GitHub</button>' +
+    '<button type="button" class="sf-ex-btn author" id="sf-ex-author">InfinityTheHoly</button>' +
+    '<button type="button" class="sf-ex-btn" id="sf-ex-github">Loader repo</button>' +
     (active
       ? '<button type="button" class="sf-ex-btn" id="sf-ex-arcade">Arcade</button>' +
         '<button type="button" class="sf-ex-btn primary" id="sf-ex-relaunch">Relaunch (F6)</button>'
       : '<button type="button" class="sf-ex-btn primary" id="sf-ex-github-primary">Get the loader</button>');
+  var author = document.getElementById("sf-ex-author");
+  if (author) author.onclick = openAuthor;
   var gh = document.getElementById("sf-ex-github");
   if (gh) gh.onclick = openGithub;
   var ghp = document.getElementById("sf-ex-github-primary");
@@ -438,6 +453,7 @@ function paintBody() {
   var sub = document.getElementById("sf-ex-sub");
   if (!body || !title) return;
   var active = isLoaderPresent();
+  body.classList.toggle("api-view", active && panelTab !== "status");
   title.textContent = active ? "SandForge Active" : "SandForge not active";
   title.className = active ? "" : "inactive";
   if (sub) {
@@ -523,7 +539,7 @@ function whenReady(callback) {
 }
 
 function playEgg() {
-  var game = window.SandforgeArcade || window.SandforgeSolitaire || window.SandforgeGrainRush;
+  var game = window.SandforgeArcade;
   if (game && typeof game.play === "function") {
     closePanel();
     return game.play();
@@ -551,7 +567,6 @@ window.SandforgeExample = {
 
 window.addEventListener("keydown", function (e) {
   if (e.key !== "Escape") return;
-  if (window.SandforgeSolitaire && window.SandforgeSolitaire.isOpen()) return;
   closePanel();
 });
 

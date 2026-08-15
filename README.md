@@ -1,45 +1,101 @@
 # SandForge Loader
 
-In-process mod loader for Sandustry. Unofficial — not affiliated with the game or Steam.
+![SandForge — Mod Loader for Sandustry](assets/sandforge-banner.png)
 
-Steam still launches `Sandustry.exe`. Install moves the stock `app.asar` to `resources/vanilla/app.asar` (not modified) and points `resources/app` at this folder. Electron 33 loads `app.asar` first when both exist, so leaving the asar in place meant the loader never ran.
+SandForge is an unofficial mod loader for the Windows version of Sandustry. It
+keeps the normal Steam launch flow while giving mods access to the Electron
+main process, game renderer, simulation workers, and a shared runtime API.
 
-**Windows only. Do not upload this folder to Steam Workshop.** Install it locally. Workshop *mods* load automatically once the loader is installed.
+> SandForge is a community project. It is not affiliated with Sandustry,
+> its developers, or Steam.
 
-## Install
+## Features
 
-Clone this repo anywhere, then:
+- Loads local mods and Steam Workshop items
+- Supports separate Electron, renderer, and worker entrypoints
+- Applies in-memory patches without modifying the original game archive
+- Provides APIs for events, commands, config, storage, assets, networking,
+  inter-mod communication, and more
+- Remains compatible with standard Sandkit mods
 
-1. Fully quit Sandustry (all `Sandustry.exe` processes). The scripts refuse to run while the game is open — a junction created then is ignored until the next launch.
-2. Run `install.cmd` (may ask for Administrator). It finds the Steam install, moves `resources\app.asar` to `resources\vanilla\app.asar`, and points `resources\app` at this folder. If `app.asar` is still next to `app`, Electron ignores the loader.
-3. Launch **from Steam**.
+## Installation
 
-Uninstall: `uninstall.cmd` (also refuses if the game is running). That restores `app.asar` from `resources/vanilla`. Steam verify / a game update may put `app.asar` back; run install again.
+SandForge currently supports Windows only.
 
-**F6** relaunches the loader after you change a mod.
+1. [Download the repository](https://github.com/InfinityTheHoly/sandforge-loader/archive/refs/heads/main.zip)
+   and extract it to a permanent folder.
+2. Fully close Sandustry. Make sure no `Sandustry.exe` processes are running.
+3. Run `install.cmd`. Windows may ask for Administrator permission.
+4. Launch Sandustry normally through Steam.
 
-## Where mods come from
+Do not move or delete the SandForge folder after installation—the game points
+to that folder while the loader is installed.
 
-| Source | Path |
+The installer preserves the original game archive in
+`resources\vanilla\app.asar`. It does not modify that archive.
+
+### Updating
+
+Replace the loader files with the new version, then run `install.cmd` again.
+Steam updates and file verification may restore the original `app.asar`; if
+SandForge stops loading afterward, rerun the installer.
+
+### Uninstalling
+
+Fully close the game and run `uninstall.cmd`. The script removes the loader
+link and restores the original game archive.
+
+## Installing mods
+
+SandForge discovers mods from both Steam Workshop and the local mods folder:
+
+| Source | Location |
 | --- | --- |
-| Workshop | `steamapps/workshop/content/2764460/<itemId>/` |
-| Local | `%AppData%\Roaming\sandustry\mods\<folder>/` |
+| Steam Workshop | `steamapps\workshop\content\2764460\<itemId>\` |
+| Local mods | `%AppData%\Roaming\sandustry\mods\<folder>\` |
 
-Local wins if the same `id` / `modID` exists in both.
+Each mod is a folder containing a `modinfo.json` file. If a local mod and a
+Workshop mod use the same `id` or `modID`, the local copy takes priority.
 
-A mod is any folder with `modinfo.json`. Official Sandkit still runs (`entry` / `main.js`, `patches.json` under `js/`, maps, assets). The loader adds:
+Press **F6** in-game to restart Sandustry after changing a mod. **F12** toggles
+the game window's DevTools.
 
-- `electronEntrypoint` — Node, Electron main, before the asar compiles
-- `gameEntrypoint` — renderer, after the window loads
-- `workerEntrypoint` — same file appended to both game workers
-- `workerEntrypoints` — `{ manager, simulation, both }` to target one worker
-- `anvil.json` / `sandforge-patches.json` — in-memory patches for asar text files
+> Electron entrypoints run with full Node.js access. Only install mods from
+> authors you trust.
 
-See [docs/MODDING.md](docs/MODDING.md) and the full **[docs/API.md](docs/API.md)**. Example: `examples/sandforge-example` (copy into local mods, or upload *that* folder — not this loader).
+## Creating mods
 
-## Config
+Standard Sandkit entrypoints, patches, maps, and assets continue to work.
+SandForge adds optional entrypoints for code that needs deeper access:
 
-`%AppData%\Roaming\sandustry\loader-config.json`
+- `electronEntrypoint` runs in the Electron main process
+- `gameEntrypoint` runs in the game renderer
+- `workerEntrypoint` runs in both game workers
+- `workerEntrypoints` targets the manager, simulation worker, or both
+- `anvil.json` and `sandforge-patches.json` define in-memory code patches
+
+Start with the [modding guide](docs/MODDING.md), browse the
+[API reference](docs/API.md), or copy
+[`examples/sandforge-example`](examples/sandforge-example) into your local
+mods folder. TypeScript declarations are available in
+[`types/sandforge.d.ts`](types/sandforge.d.ts).
+
+`api.mods.reload(id)` reloads an Electron/game entrypoint and tells workers to
+refresh within a few seconds. Use F6 for changes to startup patches,
+`anvil.json`, main-process files, or the loader itself.
+
+Only individual mods belong on Steam Workshop. **Do not upload the loader
+itself.**
+
+## Configuration
+
+Loader settings are stored in:
+
+```text
+%AppData%\Roaming\sandustry\loader-config.json
+```
+
+Example:
 
 ```json
 {
@@ -48,17 +104,66 @@ See [docs/MODDING.md](docs/MODDING.md) and the full **[docs/API.md](docs/API.md)
 }
 ```
 
-`disabled` is a list of mod ids. `api.mods.disable` unloads that mod and reloads game windows immediately. Worker files still need F6.
+`maxMapDimension` changes the map-size limit patched into the Workshop host.
+`disabled` contains mod IDs that should not load.
 
-Optional: set `SANDFORGE_MODS_PATH` to use a different local mods folder.
+Set `SANDFORGE_MODS_PATH` to use a different local mods folder. Create that
+folder before launching the game; a path that does not exist is ignored.
 
 ## Logs
 
-- Loader / plugin `console.log` — Electron main (Steam’s game log / console)
-- `api.logFile.write` — `%AppData%\Roaming\sandustry\meta\sandforge-loader.log`
+- Loader and Electron plugin `console.log` output appears in the game's
+  Electron/Steam log
+- `api.logFile.write` writes to
+  `%AppData%\Roaming\sandustry\meta\sandforge-loader.log`
+- Boot diagnostics are written to
+  `%AppData%\Roaming\sandustry\meta\sandforge-boot.json`
 
-## What this is not
+## Troubleshooting
 
-- Not a second game exe
-- Not a Workshop item
-- Not affiliated with Sandustry
+### SandForge stopped loading after a game update
+
+Fully close Sandustry and run `install.cmd` again. Steam updates and file
+verification can restore `resources\app.asar`, which takes priority over the
+loader.
+
+### The installer says Sandustry is still running
+
+Close the game and check Task Manager for any remaining `Sandustry.exe`
+processes, then rerun the installer.
+
+### The installer cannot find the game
+
+Launch Sandustry once through Steam, close it, and rerun `install.cmd`. The
+installer checks your Steam library folders and the standard Windows install
+locations.
+
+### The installer reports an existing `resources\app` folder
+
+The installer only replaces a junction previously created by SandForge. It
+will not delete a normal folder at that path. Move or remove that folder only
+if you know where it came from, then rerun `install.cmd`.
+
+### The game reports a missing vanilla `app.asar`
+
+Run `uninstall.cmd`, verify the game files in Steam, and then run
+`install.cmd` again. The loader requires a preserved stock archive at
+`resources\vanilla\app.asar`.
+
+### A mod is not detected
+
+Confirm that the mod is a direct child of the local mods folder and contains a
+valid `modinfo.json`. Folders beginning with `.` and folders named
+`node_modules`, `wrapper`, `runtime`, or `loader` are ignored.
+
+## How it works
+
+Steam still launches the original `Sandustry.exe`. The installer copies
+`resources\app.asar` to `resources\vanilla\app.asar`, removes the original
+from its old location, and creates a junction from `resources\app` to the
+SandForge folder. The loader starts first, adds mod support, and then runs the
+preserved game archive.
+
+## License
+
+SandForge Loader is available under the [MIT License](LICENSE).

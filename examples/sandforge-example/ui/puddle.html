@@ -4,313 +4,1413 @@
     <meta charset="utf-8" />
     <title>Puddle Tank — SandForge</title>
     <style>
+      :root {
+        --color-background-primary: #0d2a33;
+        --color-background-secondary: #07141a;
+        --color-border-secondary: #2a6a78;
+        --color-border-tertiary: #1a3a44;
+        --color-text-primary: #d7eef2;
+        --color-text-secondary: #6a9aa6;
+        --color-text-tertiary: #4a7a86;
+        --font-sans: "Segoe UI", sans-serif;
+      }
       html, body { margin: 0; height: 100%; background: #07141a; color: #d7eef2; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
-      .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
-      .top { display: flex; justify-content: space-between; align-items: baseline; }
+      .wrap { box-sizing: border-box; height: 100%; padding: 8px 10px 0; display: flex; flex-direction: column; }
+      .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
       .banner { margin: 0; color: #7ee8ff; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; font-size: 11px; }
       .sub { margin: 0; color: #6a9aa6; font-size: 11px; }
-      .bar { display: flex; gap: 8px; margin: 8px 0; align-items: center; }
-      button { background: #0d2a33; color: #7ee8ff; border: 1px solid #2a6a78; border-radius: 2px 8px 2px 8px; padding: 5px 10px; font: 700 11px/1 "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
-      button:hover { border-color: #7ee8ff; }
-      .hud { margin-left: auto; display: flex; gap: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9ad4df; }
-      .hud b { color: #ffe700; }
-      .stage { position: relative; width: 700px; height: 476px; border: 1px solid #2a6a78; border-radius: 2px 10px 2px 10px; overflow: hidden; cursor: crosshair; }
-      .stage canvas { position: absolute; inset: 0; width: 700px; height: 476px; display: block; }
+      .bar { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; }
+      .bar button { background: #0d2a33; color: #7ee8ff; border: 1px solid #2a6a78; border-radius: 2px 8px 2px 8px; padding: 5px 10px; font: 700 11px/1 "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+      .bar button:hover { border-color: #7ee8ff; }
+      #c { display: block; width: 100%; height: auto; image-rendering: pixelated; cursor: crosshair; border: 1px solid #2a6a78; border-radius: 2px 10px 2px 10px; background: #0c0c14; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="top">
         <p class="banner">Puddle Tank</p>
-        <p class="sub">SPH liquid in a worker, metaball surface on the GPU. Drag to stir, hold to pour, flip gravity, fill the cups.</p>
+        <p class="sub">FLIP liquids, air, walls, and sand. Paint to add.</p>
       </div>
       <div class="bar">
         <button type="button" id="back">Arcade</button>
-        <button type="button" id="flip">Flip</button>
-        <button type="button" id="new">Reset</button>
-        <div class="hud">
-          <span>Cups <b id="cups">0</b>/3</span>
-          <span>Drops <b id="drops">0</b></span>
-          <span>Clears <b id="wins">0</b></span>
-        </div>
       </div>
-      <div class="stage">
-        <canvas id="gl" width="700" height="476"></canvas>
-        <canvas id="ui" width="700" height="476"></canvas>
-      </div>
+<canvas id="c"></canvas>
+<div style="display:flex;gap:5px;padding:7px 8px;background:var(--color-background-secondary);border-top:0.5px solid var(--color-border-tertiary);align-items:center;flex-wrap:wrap;font-family:var(--font-sans);font-size:12px;color:var(--color-text-primary)">
+  <button id="b-water"   onclick="setTool('water')">💧 Water</button>
+  <button id="b-motor"   onclick="setTool('motor')">🛢️ Motor oil</button>
+  <button id="b-mineral" onclick="setTool('mineral')">🟡 Mineral oil</button>
+  <button id="b-ethanol" onclick="setTool('ethanol')">🔥 Ethanol</button>
+  <button id="b-air"     onclick="setTool('air')">💨 Air</button>
+  <button id="b-wall"    onclick="setTool('wall')">🧱 Wall</button>
+  <button id="b-sand"    onclick="setTool('sand')">🏖️ Sand</button>
+  <button id="b-rmwater" onclick="setTool('rmwater')">🪣 Erase liquids</button>
+  <button id="b-erase"   onclick="setTool('erase')">✕ Erase wall</button>
+  <button onclick="clearAll()">↺ Clear</button>
+  <label style="color:var(--color-text-secondary);display:flex;align-items:center;gap:3px">Brush<input type="range" id="sl-brush" min="1" max="8" value="2" step="1" style="width:60px"><span id="brushv">2</span></label>
+  <label style="color:var(--color-text-secondary);display:flex;align-items:center;gap:3px">View<select id="view-mode" style="font-size:12px;padding:2px 4px"><option value="normal">Normal</option><option value="pressure">Pressure</option><option value="phase">Phase</option></select></label>
+  <span style="color:var(--color-text-tertiary)">fixed physics params</span>
+  <span style="margin-left:auto;color:var(--color-text-tertiary)"><span id="pct-el">0+0 p</span> · <span id="fps-el">--</span> fps</span>
+</div>
+
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const GW=80,GH=50,CS=8;
+canvas.width=GW*CS; canvas.height=GH*CS;
+
+const USIZ=(GW+1)*GH, VSIZ=GW*(GH+1), CSIZ=GW*GH;
+const MAX_W=28000, MAX_A=26000, MAX_O=18000, MAX_E=18000;  // per-material particle budgets
+const TGT=4, ITERS=70, DT=0.016;
+
+// ---- Density model ----
+// Water density = 1.0. Air uses a softened solver density: visually it acts light,
+// but 1/1000 density makes a tiny JavaScript Gauss-Seidel pressure solve too stiff.
+// Gas is not given a blanket upward buoyancy force. Free air should expand/fill
+// its container from particle gas pressure, not rise like a hot-air balloon.
+// Buoyant rise is only applied as an interface force when gas is actually inside water.
+const RHO_W = 1.0;
+const RHO_MOTOR = 0.87;   // typical motor oil: lighter than water, heavier than mineral oil here
+const RHO_MINERAL = 0.84; // mineral oil: lighter than water/motor oil
+const RHO_ETHANOL = 0.789; // ethanol: light liquid, low viscosity
+const RHO_A = 0.06;   // light, but stable for this small browser demo
+
+const MAT_WATER=0, MAT_MOTOR=1, MAT_MINERAL=2, MAT_ETHANOL=3, MAT_NONE=255;
+const MAT_RHO=[RHO_W,RHO_MOTOR,RHO_MINERAL,RHO_ETHANOL];
+const MAT_NAME=['water','motor oil','mineral oil','ethanol'];
+const INV_RHO_CAP = 10.0;
+const PARTICLE_ADVECT_BLEND_W = 0.55; // water still follows the MAC grid strongly
+const PARTICLE_ADVECT_BLEND_A = 0.82; // gas must keep pressure impulse under water-driven compression
+const MIX_VIS_THRESHOLD = 0.62;   // dominance cutoff: prevents a thick turquoise emulsion band
+const DEMIX_NUDGE = 0.11;         // per-frame phase separation positional push
+const GAS_GRID_FORCE = 16.0;      // gas-to-liquid pressure force on MAC faces only; conservative to prevent liquid spray under high gas pressure
+const GAS_PRESSURE_BLUR_PASSES = 3;   // smoother pressure gradient; still blocked by solids
+const GAS_DRAG = 0.94;            // gas dissipation. Was 0.996 (near-frictionless), which let the
+                                  // gas cloud retain energy indefinitely and never come to rest in a
+                                  // sealed container. 0.94 still permits decompression/sloshing but
+                                  // bleeds off the kinetic energy that previously self-amplified.
+const GAS_WALL_ESCAPE_FORCE = 22.0; // compressed gas touching a wall gets an inward one-sided pressure reaction
+const GAS_WALL_ESCAPE_CAP = 4.8;    // cap wall-reaction impulse so gas cannot explode numerically
+const GAS_EOS_GAMMA = 1.7;          // nonlinear gas equation of state. Was 2.45: so stiff that a
+                                    // slightly over-packed cell (gasD^2.45) blasted gas back out
+                                    // violently, which clumped elsewhere and blasted again — a
+                                    // self-amplifying loop. 1.7 still resists hyper-compression but
+                                    // without the explosive feedback.
+const GAS_EOS_STIFFNESS = 0.9;      // extra pressure once local gas density exceeds nominal packing.
+                                    // Lowered from 1.55 for the same anti-blast reason as GAMMA.
+const GAS_WATER_VOLUME_SQUEEZE = 0.86; // water occupying a gas cell reduces available gas volume
+const GAS_MIN_FREE_VOLUME = 0.10;      // prevents singular pressure while still allowing strong compression
+const GAS_WATER_CONTACT_FORCE = 7.5; // particle-level gas pressure force applied directly to liquids; contact-only, not a blast force
+const GAS_WATER_CONTACT_CAP = 0.95;   // cap liquid contact impulse so compressed gas cannot violently spray water
+const GAS_LIQUID_RESPONSE = 0.24;     // liquid response scale to particle gas pressure
+const GAS_LIQUID_POS_PUSH = 0.006;    // tiny positional peel-off for gas/liquid overlap
+const GAS_LIQUID_SPIKE_DAMP = 0.82;   // damps existing liquid velocity before strong gas contact
+const LIQUID_GAS_SHOCK_DAMP = 0.58;    // velocity damping in gas-overlap cells; keeps pressure from turning liquid into spray
+const LIQUID_GAS_MAX_SPEED = 22.0;     // hard speed cap for liquids under high gas pressure
+const LIQUID_STRAY_DROP_DAMP = 0.32;   // suppresses tiny droplets suspended/ejected into air-heavy cells
+
+// ---- Fixed physics parameters ----
+// These replace the old tuning sliders. They are deliberately conservative: water
+// should be strongly incompressible, gas should expand by pressure, and interface
+// sharpening should remove numerical emulsion without acting like fake helium.
+const PARAM_GRAVITY = 30.0;
+const PARAM_INTERFACE = 0.85;
+const PARAM_GAS_PRESSURE = 1.75;
+const PARAM_FLIP = 0.85;   // FLIP/PIC blend. Was 0.90 (retains 90% of particle velocity each frame,
+                           // i.e. near-zero numerical dissipation). Under sustained pressure forcing
+                           // that low dissipation let energy accumulate instead of decaying, so the
+                           // water never settled. 0.85 keeps the lively FLIP look while restoring
+                           // enough damping to reach rest.
+const PARAM_VISCOSITY = 0.0;
+
+// ---- Tool / brush parameters ----
+// Brush radius is deliberately the only exposed slider. Physics remains fixed, but
+// painting can be scaled for either small bubbles or large volume edits.
+const BRUSH_MIN = 1;
+const BRUSH_MAX = 8;
+const INJECTION_PUSH_POS = 0.70;   // immediate positional displacement before new air is spawned
+const INJECTION_PUSH_VEL = 18.0;   // velocity impulse used to move old particles out of new gas volume
+const AIR_BRUSH_MAX_MULT = 4.0;    // air brush cannot pack a cell beyond 4x target density
+
+/*
+  Solid roadmap / scaffold:
+  Current solids are static grid cells (ctype=2 + userSolid). That is enough for tanks,
+  obstacles, and partitions. Dynamic solids should be added as a separate material layer,
+  not as another "fluid" phase:
+    1) rigid bodies carry position, angle, velocity, angular velocity, mass, inertia;
+    2) each body exposes a signed-distance/occupancy raster into solidPhi/solidVel;
+    3) fluid projection uses solid velocity on blocked faces instead of hard zero;
+    4) particle collisions sample the body SDF, then apply impulse/friction;
+    5) fluid-to-solid feedback integrates pressure impulses back onto the body.
+  Do not mix dynamic solids into ctype directly or they will behave like sticky fluid.
+*/
+
+// ---- Cell type ----
+// 0=empty  1=liquid  2=solid  3=air  4=mixed(liquid+air)
+let ctype     = new Uint8Array(CSIZ);
+let userSolid = new Uint8Array(CSIZ);
+let brushed   = new Uint8Array(CSIZ);
+
+// Per-cell counts and density
+let wcount = new Int32Array(CSIZ);    // water particles per cell
+let motorCount = new Int32Array(CSIZ); // motor-oil particles per cell
+let mineralCount = new Int32Array(CSIZ); // mineral-oil particles per cell
+let ethanolCount = new Int32Array(CSIZ); // ethanol particles per cell
+let acount = new Int32Array(CSIZ);    // air particles per cell
+let liquidCount = new Int32Array(CSIZ); // total liquid particles per cell
+let liquidMass  = new Float32Array(CSIZ); // density-weighted liquid occupancy
+let domMat      = new Uint8Array(CSIZ);  // dominant liquid material for rendering
+let rho    = new Float32Array(CSIZ); // effective cell density (for pressure)
+let gasP   = new Float32Array(CSIZ);   // gas particle pressure / density diagnostic
+let gasD   = new Float32Array(CSIZ);   // raw gas density after local available-volume correction
+let gasP2  = new Float32Array(CSIZ);   // scratch for pressure smoothing
+let solverP= new Float32Array(CSIZ);   // projection pressure diagnostic for pressure view
+let pres   = new Float32Array(CSIZ);   // pressure solve buffer
+let pres2  = new Float32Array(CSIZ);   // pressure solve scratch
+
+// Shared staggered MAC velocity field
+let u=new Float32Array(USIZ), v=new Float32Array(VSIZ);
+let u_old=new Float32Array(USIZ), v_old=new Float32Array(VSIZ);
+let uw=new Float32Array(USIZ), vw=new Float32Array(VSIZ);
+let u_tmp=new Float32Array(USIZ), v_tmp=new Float32Array(VSIZ);
+
+// Water particles
+let wx=new Float32Array(MAX_W), wy=new Float32Array(MAX_W);
+let wu=new Float32Array(MAX_W), wv=new Float32Array(MAX_W);
+let nw=0;
+
+// Motor-oil particles
+let mox=new Float32Array(MAX_O), moy=new Float32Array(MAX_O);
+let mou=new Float32Array(MAX_O), mov=new Float32Array(MAX_O);
+let nmo=0;
+
+// Mineral-oil particles
+let minx=new Float32Array(MAX_O), miny=new Float32Array(MAX_O);
+let minu=new Float32Array(MAX_O), minv=new Float32Array(MAX_O);
+let nmin=0;
+
+// Ethanol particles
+let ex=new Float32Array(MAX_E), ey=new Float32Array(MAX_E);
+let eu=new Float32Array(MAX_E), ev=new Float32Array(MAX_E);
+let ne=0;
+
+// Air particles
+let ax=new Float32Array(MAX_A), ay=new Float32Array(MAX_A);
+let au=new Float32Array(MAX_A), av=new Float32Array(MAX_A);
+let na=0;
+
+// ---- CA sand ----
+// Sand is a cellular automaton on the fluid grid (one grain per cell), NOT a FLIP
+// phase. It has no momentum: each frame every grain tries to fall straight down,
+// then diagonally, into any non-solid, non-sand cell. Coupling to the fluid is done
+// by marking sand cells as solid for the duration of the fluid solve (so water dams
+// and pools against sand automatically), then running the automaton afterwards. Sand
+// sinks through liquid/gas because those count as passable to the CA; displaced fluid
+// is evicted upward after the grains move.
+let sand  = new Uint8Array(CSIZ);   // 1 = this cell holds a sand grain
+let nsand = 0;                      // live grain count (for the HUD)
+
+let frameNo=0;
+
+const UI=(x,y)=>y*(GW+1)+x;
+const VI=(x,y)=>y*GW+x;
+const CI=(x,y)=>y*GW+x;
+
+function initBorder(){
+  for(let x=0;x<GW;x++){ctype[CI(x,0)]=2;ctype[CI(x,GH-1)]=2;}
+  for(let y=0;y<GH;y++){ctype[CI(0,y)]=2;ctype[CI(GW-1,y)]=2;}
+}
+initBorder();
+
+// ---- Bilinear sample / splat ----
+function sU(arr,sx,sy){
+  const gx=Math.max(0,Math.min(GW,sx)),gy=Math.max(0,Math.min(GH-1,sy-0.5));
+  const x0=Math.floor(gx),y0=Math.floor(gy),S=GW+1;
+  const x1=Math.min(x0+1,GW),y1=Math.min(y0+1,GH-1),fx=gx-x0,fy=gy-y0;
+  return (1-fx)*(1-fy)*arr[y0*S+x0]+fx*(1-fy)*arr[y0*S+x1]+(1-fx)*fy*arr[y1*S+x0]+fx*fy*arr[y1*S+x1];
+}
+function sV(arr,sx,sy){
+  const gx=Math.max(0,Math.min(GW-1,sx-0.5)),gy=Math.max(0,Math.min(GH,sy));
+  const x0=Math.floor(gx),y0=Math.floor(gy),S=GW;
+  const x1=Math.min(x0+1,GW-1),y1=Math.min(y0+1,GH),fx=gx-x0,fy=gy-y0;
+  return (1-fx)*(1-fy)*arr[y0*S+x0]+fx*(1-fy)*arr[y0*S+x1]+(1-fx)*fy*arr[y1*S+x0]+fx*fy*arr[y1*S+x1];
+}
+function splU(sx,sy,val,wt,mass=1){
+  const gx=Math.max(0,Math.min(GW,sx)),gy=Math.max(0,Math.min(GH-1,sy-0.5));
+  const x0=Math.floor(gx),y0=Math.floor(gy),S=GW+1;
+  const x1=Math.min(x0+1,GW),y1=Math.min(y0+1,GH-1),fx=gx-x0,fy=gy-y0;
+  const w00=(1-fx)*(1-fy),w10=fx*(1-fy),w01=(1-fx)*fy,w11=fx*fy;
+  u[y0*S+x0]+=w00*val;wt[y0*S+x0]+=w00*mass; u[y0*S+x1]+=w10*val;wt[y0*S+x1]+=w10*mass;
+  u[y1*S+x0]+=w01*val;wt[y1*S+x0]+=w01*mass; u[y1*S+x1]+=w11*val;wt[y1*S+x1]+=w11*mass;
+}
+function splV(sx,sy,val,wt,mass=1){
+  const gx=Math.max(0,Math.min(GW-1,sx-0.5)),gy=Math.max(0,Math.min(GH,sy));
+  const x0=Math.floor(gx),y0=Math.floor(gy),S=GW;
+  const x1=Math.min(x0+1,GW-1),y1=Math.min(y0+1,GH),fx=gx-x0,fy=gy-y0;
+  const w00=(1-fx)*(1-fy),w10=fx*(1-fy),w01=(1-fx)*fy,w11=fx*fy;
+  v[y0*S+x0]+=w00*val;wt[y0*S+x0]+=w00*mass; v[y0*S+x1]+=w10*val;wt[y0*S+x1]+=w10*mass;
+  v[y1*S+x0]+=w01*val;wt[y1*S+x0]+=w01*mass; v[y1*S+x1]+=w11*val;wt[y1*S+x1]+=w11*mass;
+}
+
+// ---- P2G: both fluids splat onto shared velocity field ----
+// Weight by particle density so heavier fluid dominates velocity where mixed.
+function splatLiquidParticles(px,py,pu,pv,n,mat,countArr){
+  const rr=MAT_RHO[mat];
+  for(let i=0;i<n;i++){
+    splU(px[i],py[i],pu[i]*rr,uw,rr);
+    splV(px[i],py[i],pv[i]*rr,vw,rr);
+    const cx=Math.floor(px[i]), cy=Math.floor(py[i]);
+    if(cx>=0&&cx<GW&&cy>=0&&cy<GH){ countArr[CI(cx,cy)]++; }
+  }
+}
+function dominantLiquidMat(wc,moc,mic,ec){
+  let best=wc, mat=MAT_WATER;
+  if(moc>best){best=moc;mat=MAT_MOTOR;}
+  if(mic>best){best=mic;mat=MAT_MINERAL;}
+  if(ec>best){best=ec;mat=MAT_ETHANOL;}
+  return best>0?mat:MAT_NONE;
+}
+function p2g(){
+  u.fill(0);v.fill(0);uw.fill(0);vw.fill(0);
+  wcount.fill(0);motorCount.fill(0);mineralCount.fill(0);ethanolCount.fill(0);acount.fill(0);
+  liquidCount.fill(0); liquidMass.fill(0); domMat.fill(MAT_NONE);
+  // Reset fluid cells
+  for(let i=0;i<CSIZ;i++) if(ctype[i]===1||ctype[i]===3||ctype[i]===4) ctype[i]=0;
+
+  // Liquids splat density-weighted momentum onto the shared MAC grid.
+  splatLiquidParticles(wx,wy,wu,wv,nw,MAT_WATER,wcount);
+  splatLiquidParticles(mox,moy,mou,mov,nmo,MAT_MOTOR,motorCount);
+  splatLiquidParticles(minx,miny,minu,minv,nmin,MAT_MINERAL,mineralCount);
+  splatLiquidParticles(ex,ey,eu,ev,ne,MAT_ETHANOL,ethanolCount);
+
+  // Air splats light momentum. Air should not dominate liquid velocity in mixed cells.
+  for(let i=0;i<na;i++){
+    splU(ax[i],ay[i],au[i]*RHO_A,uw,RHO_A);
+    splV(ax[i],ay[i],av[i]*RHO_A,vw,RHO_A);
+    const cx=Math.floor(ax[i]),cy=Math.floor(ay[i]);
+    if(cx>=0&&cx<GW&&cy>=0&&cy<GH){acount[CI(cx,cy)]++;}
+  }
+
+  // Normalize grid velocity by density-weighted splat mass.
+  for(let i=0;i<USIZ;i++) if(uw[i]>1e-8) u[i]/=uw[i];
+  for(let i=0;i<VSIZ;i++) if(vw[i]>1e-8) v[i]/=vw[i];
+
+  // Cell types, dominant liquid material, and effective density.
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const ci=CI(x,y);
+    if(ctype[ci]===2) continue;
+    const wc=wcount[ci], moc=motorCount[ci], mic=mineralCount[ci], ec=ethanolCount[ci], ac=acount[ci];
+    const lc=wc+moc+mic+ec;
+    liquidCount[ci]=lc;
+    liquidMass[ci]=wc*RHO_W + moc*RHO_MOTOR + mic*RHO_MINERAL + ec*RHO_ETHANOL;
+    domMat[ci]=dominantLiquidMat(wc,moc,mic,ec);
+    const hasL=lc>0, hasA=ac>0;
+    if(hasL&&hasA){
+      const lf=lc/(lc+ac);
+      rho[ci]=(liquidMass[ci]+RHO_A*ac)/(lc+ac);
+      if(lf>MIX_VIS_THRESHOLD) ctype[ci]=1;
+      else if(lf<1-MIX_VIS_THRESHOLD) ctype[ci]=3;
+      else ctype[ci]=4;
+    }
+    else if(hasL) {ctype[ci]=1; rho[ci]=Math.max(RHO_A, liquidMass[ci]/lc);}
+    else if(hasA) {ctype[ci]=3; rho[ci]=RHO_A;}
+    else          {ctype[ci]=0; rho[ci]=0;}
+  }
+  computeGasPressure();
+}
+
+
+// ---- Particle gas pressure ----
+// Gas is still particle-based: acount is built from gas particles every frame.
+// gasP is a pressure/density field derived from those particles, used only to
+// push the particles and nearby fluid away from compressed gas regions.
+function computeGasPressure(){
+  gasP.fill(0); gasP2.fill(0); gasD.fill(0);
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const ci=CI(x,y);
+    if(ctype[ci]===2) continue;
+
+    // Gas pressure must be based on gas mass divided by AVAILABLE gas volume, not
+    // just gas particles per cell. This was the remaining hyper-compression bug:
+    // water could move into the same cells as air, reducing the air's physical
+    // volume, while the old pressure still saw only "about four air particles"
+    // and therefore did not push back until the gas had collapsed into a pinpoint.
+    const airMass=acount[ci]/TGT;
+    const liquidOcc=Math.min(1.15,liquidCount[ci]/TGT);
+    const freeVol=clamp(1.0 - GAS_WATER_VOLUME_SQUEEZE*liquidOcc, GAS_MIN_FREE_VOLUME, 1.0);
+    const dens=airMass/freeVol;
+    gasD[ci]=dens;
+
+    // Nonlinear equation of state: relaxed gas stays smooth, but over-compressed
+    // gas becomes stiff quickly. This is not a full PV solver yet, but it gives
+    // the particle gas a real compression backstop.
+    gasP[ci]=dens + GAS_EOS_STIFFNESS*Math.pow(Math.max(0,dens-1.0), GAS_EOS_GAMMA);
+  }
+
+  // Smooth pressure without leaking through solids. Use a center-heavy blur so
+  // hotspots spread into a coherent gas pressure field instead of a one-cell spike.
+  for(let pass=0;pass<GAS_PRESSURE_BLUR_PASSES;pass++){
+    for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+      const ci=CI(x,y);
+      if(ctype[ci]===2){gasP2[ci]=0;continue;}
+      let sum=gasP[ci]*3.0, w=3.0;
+      const nbs=[[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+      for(const [nx,ny] of nbs){
+        if(nx<0||nx>=GW||ny<0||ny>=GH) continue;
+        const ni=CI(nx,ny);
+        if(ctype[ni]===2) continue;
+        sum+=gasP[ni]; w+=1.0;
+      }
+      gasP2[ci]=sum/w;
+    }
+    gasP.set(gasP2);
+  }
+}
+function sampleC(arr,sx,sy){
+  const gx=Math.max(0,Math.min(GW-1,sx)), gy=Math.max(0,Math.min(GH-1,sy));
+  const x0=Math.floor(gx), y0=Math.floor(gy);
+  const x1=Math.min(x0+1,GW-1), y1=Math.min(y0+1,GH-1);
+  const fx=gx-x0, fy=gy-y0;
+  return (1-fx)*(1-fy)*arr[CI(x0,y0)] + fx*(1-fy)*arr[CI(x1,y0)] +
+         (1-fx)*fy*arr[CI(x0,y1)] + fx*fy*arr[CI(x1,y1)];
+}
+
+function solidOrOutCell(x,y){
+  return x<0||x>=GW||y<0||y>=GH||ctype[CI(x,y)]===2;
+}
+
+function sampleGasPForParticle(sx,sy,px,py){
+  // Solid-aware gas pressure sampling. The old bilinear sampler read solid border
+  // cells as zero pressure. That made walls look like low-pressure sinks, so gas
+  // would press into the wall and visually glue there. For particle pressure
+  // gradients, a sample that lands inside solid uses the particle-local pressure
+  // as a one-sided wall boundary value instead of zero.
+  const gx=Math.max(0,Math.min(GW-1,sx)), gy=Math.max(0,Math.min(GH-1,sy));
+  const x0=Math.floor(gx), y0=Math.floor(gy);
+  const x1=Math.min(x0+1,GW-1), y1=Math.min(y0+1,GH-1);
+  const fx=gx-x0, fy=gy-y0;
+  const p0=sampleC(gasP,px,py);
+  const c00=solidOrOutCell(x0,y0)?p0:gasP[CI(x0,y0)];
+  const c10=solidOrOutCell(x1,y0)?p0:gasP[CI(x1,y0)];
+  const c01=solidOrOutCell(x0,y1)?p0:gasP[CI(x0,y1)];
+  const c11=solidOrOutCell(x1,y1)?p0:gasP[CI(x1,y1)];
+  return (1-fx)*(1-fy)*c00 + fx*(1-fy)*c10 + (1-fx)*fy*c01 + fx*fy*c11;
+}
+
+function applyGasExpansion(strength){
+  if(strength<=0) return;
+  const k=GAS_GRID_FORCE*strength;
+  // Gas particles handle gas-gas spreading. The MAC-grid gas force is only for
+  // gas pushing liquid/interface cells. Letting pure gas pressure directly drive
+  // every empty-air face was producing a slow solver-sweep drift to the right.
+  for(let y=0;y<GH;y++) for(let x=1;x<GW;x++){
+    const li=CI(x-1,y), ri=CI(x,y);
+    if(ctype[li]===2||ctype[ri]===2) continue;
+    if(gasP[li]<=0 && gasP[ri]<=0) continue;
+    if((liquidCount[li]+liquidCount[ri])<=0) continue; // no liquid/interface here
+    const dp=gasP[li]-gasP[ri];
+    u[UI(x,y)] += dp*k*DT;
+  }
+  for(let y=1;y<GH;y++) for(let x=0;x<GW;x++){
+    const ti=CI(x,y-1), bi=CI(x,y);
+    if(ctype[ti]===2||ctype[bi]===2) continue;
+    if(gasP[ti]<=0 && gasP[bi]<=0) continue;
+    if((liquidCount[ti]+liquidCount[bi])<=0) continue; // no liquid/interface here
+    const dp=gasP[ti]-gasP[bi];
+    v[VI(x,y)] += dp*k*DT;
+  }
+}
+
+function gasNearSolidOrLiquid(cx,cy){
+  // Used by the anti-drift guard. When gas is pressing against a wall or water,
+  // a net push away from that boundary is physically correct and must not be removed.
+  for(let oy=-1;oy<=1;oy++) for(let ox=-1;ox<=1;ox++){
+    const x=cx+ox, y=cy+oy;
+    if(x<0||x>=GW||y<0||y>=GH) return true;
+    const ci=CI(x,y);
+    if(ctype[ci]===2 || liquidCount[ci]>0) return true;
+  }
+  return false;
+}
+
+
+function sampleLiquidOcc(sx,sy){
+  const gx=Math.max(0,Math.min(GW-1,sx)), gy=Math.max(0,Math.min(GH-1,sy));
+  const x0=Math.floor(gx), y0=Math.floor(gy);
+  const x1=Math.min(x0+1,GW-1), y1=Math.min(y0+1,GH-1);
+  const fx=gx-x0, fy=gy-y0;
+  const c00=liquidCount[CI(x0,y0)]/TGT, c10=liquidCount[CI(x1,y0)]/TGT;
+  const c01=liquidCount[CI(x0,y1)]/TGT, c11=liquidCount[CI(x1,y1)]/TGT;
+  return (1-fx)*(1-fy)*c00 + fx*(1-fy)*c10 + (1-fx)*fy*c01 + fx*fy*c11;
+}
+
+
+function applyGasPressureToLiquidArray(px,py,pu,pv,n,matRho){
+  const k=GAS_WATER_CONTACT_FORCE*PARAM_GAS_PRESSURE;
+  for(let i=0;i<n;i++){
+    const x=px[i], y=py[i];
+    const cx=Math.floor(x), cy=Math.floor(y);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const ci=CI(cx,cy);
+    const localGas=acount[ci];
+
+    // Contact-only coupling. The previous version let high gas pressure gradients kick
+    // nearby liquid particles even when they were not actually sharing volume with gas.
+    // That is what produced the wild water spray. Gas can still push liquids through the
+    // MAC grid; this particle path is only for resolving actual gas/liquid overlap.
+    if(localGas<=0) continue;
+
+    const gasFrac=clamp(localGas/TGT,0,2.0);
+    const overlap=Math.min(1.0, gasFrac);
+    const pl=sampleGasPForParticle(x-0.70,y,x,y), pr=sampleGasPForParticle(x+0.70,y,x,y);
+    const pt=sampleGasPForParticle(x,y-0.70,x,y), pb=sampleGasPForParticle(x,y+0.70,x,y);
+
+    const densityScale=clamp(1.0/Math.max(0.78,matRho),0.82,1.18);
+    const response=GAS_LIQUID_RESPONSE*(0.25 + 0.45*Math.sqrt(overlap))*densityScale;
+    let du=clamp((pl-pr)*k*DT*response,-GAS_WATER_CONTACT_CAP,GAS_WATER_CONTACT_CAP);
+    let dv=clamp((pt-pb)*k*DT*response,-GAS_WATER_CONTACT_CAP,GAS_WATER_CONTACT_CAP);
+
+    // Strong compressed air should displace liquid as a coherent interface, not launch
+    // particle-scale droplets. Dampen first, then apply the small contact correction.
+    const shock=clamp((gasD[ci]-0.9)*0.25 + gasFrac*0.18,0,LIQUID_GAS_SHOCK_DAMP);
+    if(shock>0){
+      pu[i]*=(1-shock*0.55);
+      pv[i]*=(1-shock*0.55);
+    }
+
+    const m=Math.hypot(du,dv);
+    if(m>1e-6){
+      const nx=du/m, ny=dv/m;
+      const nxp=clamp(x+nx*GAS_LIQUID_POS_PUSH*overlap,1.01,GW-1.01);
+      const nyp=clamp(y+ny*GAS_LIQUID_POS_PUSH*overlap,1.01,GH-1.01);
+      if(!isSolidAtPos(nxp,nyp)){ px[i]=nxp; py[i]=nyp; }
+    }
+
+    pu[i]=clamp(pu[i]+du,-65,65);
+    pv[i]=clamp(pv[i]+dv,-65,65);
+  }
+}
+function applyGasPressureToLiquids(strength){
+  // Direct gas->liquid coupling. Compressed air still pushes liquids away, but the
+  // coupling is intentionally softened so high gas pressure does not make water/oils explode.
+  if(strength<=0) return;
+  applyGasPressureToLiquidArray(wx,wy,wu,wv,nw,RHO_W);
+  applyGasPressureToLiquidArray(mox,moy,mou,mov,nmo,RHO_MOTOR);
+  applyGasPressureToLiquidArray(minx,miny,minu,minv,nmin,RHO_MINERAL);
+  applyGasPressureToLiquidArray(ex,ey,eu,ev,ne,RHO_ETHANOL);
+
+  // Gas also tries to leave liquid-occupied volume. This responds to overlap only;
+  // it does not create fake upward buoyancy in open air.
+  const wk=18.0*strength*DT;
+  for(let i=0;i<na;i++){
+    const x=ax[i], y=ay[i];
+    const lc=sampleLiquidOcc(x,y);
+    if(lc<0.12) continue;
+    const wl=sampleLiquidOcc(x-0.70,y), wr=sampleLiquidOcc(x+0.70,y);
+    const wt=sampleLiquidOcc(x,y-0.70), wb=sampleLiquidOcc(x,y+0.70);
+    const du=clamp((wl-wr)*wk,-2.8,2.8);
+    const dv=clamp((wt-wb)*wk,-2.8,2.8);
+    au[i]=clamp(au[i]+du,-65,65);
+    av[i]=clamp(av[i]+dv,-65,65);
+  }
+}
+
+
+// applyGasParticlePressure and applyGasOverpackRedistribution were removed. They
+// were a particle-space gas self-pressure solver running after the grid projection,
+// duplicating applyGasExpansion (which does the same job in the correct, pre-projection
+// place). Running two uncoordinated pressure solvers pumped energy into a sealed box
+// and prevented the water from settling. Gas self-pressure is now handled solely by
+// applyGasExpansion + the variable-density projection; gas/liquid and gas/wall contact
+// coupling remain below.
+
+
+function applyGasWallEscape(strength){
+  // One-sided wall pressure reaction for gas particles. Pressure inside a solid
+  // wall is not zero-pressure atmosphere; it is an impenetrable boundary. When
+  // compressed gas is sitting against a wall, the missing outside sample should
+  // create an inward reaction so the gas peels off the wall and expands into the
+  // container instead of smearing along the boundary.
+  if(strength<=0) return;
+  const k=GAS_WALL_ESCAPE_FORCE*strength*DT;
+  for(let i=0;i<na;i++){
+    const x=ax[i], y=ay[i];
+    const cx=Math.floor(x), cy=Math.floor(y);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const p0=sampleC(gasP,x,y);
+    if(p0<0.08) continue;
+    let nx=0, ny=0;
+    if(cx<=1 || ctype[CI(cx-1,cy)]===2) nx += 1;
+    if(cx>=GW-2 || ctype[CI(cx+1,cy)]===2) nx -= 1;
+    if(cy<=1 || ctype[CI(cx,cy-1)]===2) ny += 1;
+    if(cy>=GH-2 || ctype[CI(cx,cy+1)]===2) ny -= 1;
+    // Include corner/diagonal solids softly so gas does not collect in corners.
+    if(ctype[CI(cx-1,cy-1)]===2){ nx += 0.45; ny += 0.45; }
+    if(ctype[CI(cx+1,cy-1)]===2){ nx -= 0.45; ny += 0.45; }
+    if(ctype[CI(cx-1,cy+1)]===2){ nx += 0.45; ny -= 0.45; }
+    if(ctype[CI(cx+1,cy+1)]===2){ nx -= 0.45; ny -= 0.45; }
+    const m=Math.hypot(nx,ny);
+    if(m<1e-6) continue;
+    const impulse=Math.min(GAS_WALL_ESCAPE_CAP,k*p0);
+    au[i]=clamp(au[i]+(nx/m)*impulse,-65,65);
+    av[i]=clamp(av[i]+(ny/m)*impulse,-65,65);
+    // Nudge position a hair inward so particles do not sit forever exactly on
+    // the collision clamp plane while their normal velocity is being clipped.
+    const px=clamp(x+(nx/m)*0.025,1.01,GW-1.01);
+    const py=clamp(y+(ny/m)*0.025,1.01,GH-1.01);
+    if(!isSolidAtPos(px,py)){ ax[i]=px; ay[i]=py; }
+  }
+}
+
+function removeGasBulkDrift(){
+  // Last-resort bias guard only. The previous version always subtracted the free-gas
+  // mean horizontal velocity; that pinned compressed gas to corners. Now this runs
+  // only when the gas is relaxed and away from boundaries/liquid. Under compression,
+  // wall and water contact are allowed to move the gas cloud.
+  let sumU=0, sumV=0, cnt=0, contact=0;
+  for(let i=0;i<na;i++){
+    const cx=Math.floor(ax[i]), cy=Math.floor(ay[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const [wf]=phaseFracAt(cx,cy);
+    if(wf>=0.12) {contact++; continue;}
+    if(gasNearSolidOrLiquid(cx,cy)) contact++;
+    sumU += au[i]; sumV += av[i]; cnt++;
+  }
+  if(cnt<32) return;
+  const contactFrac=contact/(cnt+contact);
+  if(contactFrac>0.04) return; // boundary/liquid contact may legitimately create net motion
+  const meanU=sumU/cnt, meanV=sumV/cnt;
+  if(Math.hypot(meanU,meanV)<0.003) return;
+  for(let i=0;i<na;i++){
+    const cx=Math.floor(ax[i]), cy=Math.floor(ay[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const [wf]=phaseFracAt(cx,cy);
+    if(wf<0.12 && !gasNearSolidOrLiquid(cx,cy)){
+      au[i]-=meanU*0.65;
+      av[i]-=meanV*0.65;
+    }
+  }
+}
+
+// ---- Body forces ----
+// Canvas y is positive downward. Water gets full gravity. Gas also has weight,
+// but it is light; pure gas does NOT receive a fake upward force. That matters:
+// free air should expand to fill the container rather than collect at the ceiling.
+function isFluid(ct){ return ct===1||ct===3||ct===4; }
+function phaseForce(ci,g){
+  const ct=ctype[ci];
+  if(ct===1){
+    const lc=liquidCount[ci];
+    return lc>0 ? g*(liquidMass[ci]/lc)/RHO_W : 0;
+  }
+  if(ct===3) return 0; // free gas is pressure-supported; do not let tracer air sink under grid gravity
+  if(ct===4){
+    const lc=liquidCount[ci], ac=acount[ci], n=lc+ac+1e-6;
+    const lf=lc/n;
+    const lr=lc>0 ? liquidMass[ci]/lc : 0;
+    return g*lf*lr/RHO_W; // mixture weight comes from the liquid fraction; gas pressure supports the gas
+  }
+  return 0;
+}
+function applyBodyForces(g){
+  for(let y=1;y<GH;y++) for(let x=0;x<GW;x++){
+    const ca=CI(x,y-1), cb=CI(x,Math.min(y,GH-1));
+    const ta=ctype[ca], tb=ctype[cb];
+    if(ta===2||tb===2) continue;
+    if(!isFluid(ta)&&!isFluid(tb)) continue;
+    const fa=isFluid(ta)?phaseForce(ca,g):0;
+    const fb=isFluid(tb)?phaseForce(cb,g):0;
+    const n=(isFluid(ta)?1:0)+(isFluid(tb)?1:0);
+    v[VI(x,y)] += ((fa+fb)/Math.max(1,n))*DT;
+  }
+}
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function phaseFracAt(cx,cy){
+  if(cx<0||cx>=GW||cy<0||cy>=GH) return [0,0];
+  const ci=CI(cx,cy), n=liquidCount[ci]+acount[ci]+1e-6;
+  return [liquidCount[ci]/n, acount[ci]/n];
+}
+function avgLiquidRhoAtCell(ci){
+  return liquidCount[ci]>0 ? liquidMass[ci]/liquidCount[ci] : 0;
+}
+
+
+function applyLiquidAirAndDensityForces(px,py,pu,pv,n,matRho){
+  const strayKick = PARAM_GRAVITY*PARAM_INTERFACE*DT*1.10;
+  const densityKick = PARAM_GRAVITY*PARAM_INTERFACE*DT*1.55;
+  for(let i=0;i<n;i++){
+    const cx=Math.floor(px[i]), cy=Math.floor(py[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const ci=CI(cx,cy);
+    const [,af]=phaseFracAt(cx,cy);
+    if(af>0.20) pv[i]+=strayKick*(0.5+1.8*af)*(matRho/RHO_W);
+
+    // Liquid/liquid buoyancy: heavier liquid sinks through lighter liquid;
+    // lighter liquid floats through heavier liquid. This gives water > motor oil >
+    // mineral oil > ethanol stratification without needing separate pressure grids.
+    if(liquidCount[ci]>1){
+      const ar=avgLiquidRhoAtCell(ci);
+      const diff=(matRho-ar);
+      if(Math.abs(diff)>0.015){
+        pv[i]+=densityKick*diff*3.2;
+      }
+    }
+    pv[i]=clamp(pv[i],-65,65);
+  }
+}
+function applyInterfaceForces(g,interfaceStrength){
+  // Immiscible/material-interface correction only. Normal liquid weight is handled
+  // by grid gravity. Extra kicks are for gas/liquid separation and density sorting.
+  applyLiquidAirAndDensityForces(wx,wy,wu,wv,nw,RHO_W);
+  applyLiquidAirAndDensityForces(mox,moy,mou,mov,nmo,RHO_MOTOR);
+  applyLiquidAirAndDensityForces(minx,miny,minu,minv,nmin,RHO_MINERAL);
+  applyLiquidAirAndDensityForces(ex,ey,eu,ev,ne,RHO_ETHANOL);
+
+  const bubbleKick = g*interfaceStrength*DT*1.20;
+  for(let i=0;i<na;i++){
+    const cx=Math.floor(ax[i]), cy=Math.floor(ay[i]);
+    const [lf]=phaseFracAt(cx,cy);
+    if(lf>0.18){
+      av[i]-=bubbleKick*lf; // bubble rise only inside liquid/interface
+    } else if(av[i]<0){
+      av[i]*=0.97; // bleed stale artificial lift from older frames
+    }
+    av[i]=clamp(av[i],-65,65);
+  }
+}
+
+
+function separateLiquidArray(px,py,pu,pv,n,matRho,interfaceStrength){
+  const nudge=DEMIX_NUDGE*interfaceStrength;
+  for(let i=0;i<n;i++){
+    const cx=Math.floor(px[i]), cy=Math.floor(py[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const ci=CI(cx,cy);
+    const lc=liquidCount[ci], ac=acount[ci];
+    if(ac>lc){
+      const below=CI(cx,Math.min(GH-2,cy+1));
+      if(ctype[below]!==2){
+        py[i]+=nudge*(1+Math.min(2,ac/Math.max(1,lc)))*(matRho/RHO_W);
+        pv[i]=Math.max(pv[i],4.0*interfaceStrength*(matRho/RHO_W));
+      }
+    }
+
+    // liquid/liquid density demixing. This is intentionally conservative so oils
+    // float above water without exploding when materials are painted together.
+    if(lc>1){
+      const ar=avgLiquidRhoAtCell(ci);
+      const diff=matRho-ar;
+      if(diff>0.018){
+        const below=CI(cx,Math.min(GH-2,cy+1));
+        if(ctype[below]!==2){ py[i]+=nudge*Math.min(1.6,diff*7.0); pv[i]=Math.max(pv[i],2.0*interfaceStrength); }
+      } else if(diff<-0.018){
+        const above=CI(cx,Math.max(1,cy-1));
+        if(ctype[above]!==2){ py[i]-=nudge*Math.min(1.6,-diff*7.0); pv[i]=Math.min(pv[i],-2.0*interfaceStrength); }
+      }
+    }
+  }
+}
+function separatePhases(interfaceStrength){
+  if(interfaceStrength<=0) return;
+  separateLiquidArray(wx,wy,wu,wv,nw,RHO_W,interfaceStrength);
+  separateLiquidArray(mox,moy,mou,mov,nmo,RHO_MOTOR,interfaceStrength);
+  separateLiquidArray(minx,miny,minu,minv,nmin,RHO_MINERAL,interfaceStrength);
+  separateLiquidArray(ex,ey,eu,ev,ne,RHO_ETHANOL,interfaceStrength);
+
+  // Air rises out of liquid-dominant cells.
+  const nudge=DEMIX_NUDGE*interfaceStrength;
+  for(let i=0;i<na;i++){
+    const cx=Math.floor(ax[i]), cy=Math.floor(ay[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const ci=CI(cx,cy);
+    const lc=liquidCount[ci], ac=acount[ci];
+    if(lc>ac){
+      const above=CI(cx,Math.max(1,cy-1));
+      if(ctype[above]!==2){
+        ay[i]-=nudge*(1+Math.min(2,lc/Math.max(1,ac)));
+        av[i]=Math.min(av[i],-4.0*interfaceStrength);
+      }
+    }
+  }
+}
+
+
+// ---- Viscosity ----
+function applyViscosity(nu){
+  if(nu<0.01) return;
+  const k=nu*DT;
+  u_tmp.set(u);
+  for(let y=1;y<GH-1;y++) for(let x=1;x<GW-1;x++)
+    u[UI(x,y)]+=k*(u_tmp[UI(x-1,y)]+u_tmp[UI(x+1,y)]+u_tmp[UI(x,y-1)]+u_tmp[UI(x,y+1)]-4*u_tmp[UI(x,y)]);
+  v_tmp.set(v);
+  for(let y=1;y<GH-1;y++) for(let x=1;x<GW-1;x++)
+    v[VI(x,y)]+=k*(v_tmp[VI(x-1,y)]+v_tmp[VI(x+1,y)]+v_tmp[VI(x,y-1)]+v_tmp[VI(x,y+1)]-4*v_tmp[VI(x,y)]);
+}
+
+// ---- Solid BCs ----
+function enforceSolid(){
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    if(ctype[CI(x,y)]!==2) continue;
+    u[UI(x,y)]=0;u[UI(x+1,y)]=0;v[VI(x,y)]=0;v[VI(x,y+1)]=0;
+  }
+}
+
+// ---- Pressure projection ----
+// Variable-density velocity projection. The important difference from the old version:
+// pressure corrections are scaled by inverse density, so light air accelerates far more
+// than water and bubbles can displace water instead of becoming a dead pressure pillow.
+function cellRho(ci){
+  const ct=ctype[ci];
+  if(ct===1) return RHO_W;
+  if(ct===3) return RHO_A;
+  if(ct===4) return Math.max(RHO_A, rho[ci]);
+  return RHO_A; // empty/open cells behave like atmosphere
+}
+function faceInvRho(ci,ni,nt){
+  if(nt===2) return 0;
+  const r0=cellRho(ci), r1=cellRho(ni);
+  return Math.min(INV_RHO_CAP, 2/(r0+r1));
+}
+function project(){
+  enforceSolid();
+  solverP.fill(0);
+  pres.fill(0);
+  pres2.fill(0);
+
+  const WATER_DENS_K=1.05;
+  const AIR_DENS_K=0.58;
+
+  // Deadbands on the compressibility source terms. THIS IS THE KEY SETTLING FIX.
+  //
+  // The `expansion` term below asks the solver to expand a cell whenever it holds
+  // more liquid (liquidCount/TGT > 1) or more gas (gasD > 1) than nominal. In an
+  // OPEN container that demand is satisfiable — fluid moves into the headspace and
+  // the term relaxes to zero at rest. In a SEALED, completely full box it is NOT:
+  // there is nowhere for the volume to go, so the term stays nonzero forever and
+  // injects a pressure impulse every single frame. Combined with a high FLIP ratio
+  // (low dissipation) that per-frame forcing accumulated and the water never settled.
+  //
+  // The deadbands let a packed-but-static configuration count as "at rest": small
+  // over-occupancy is tolerated without forcing. Only genuine over-packing beyond
+  // the band still drives expansion, so legitimate decompression/bubbling is intact.
+  const WATER_DB = 0.30;   // tolerate liquidCount up to 1.30*TGT before forcing expansion
+  const AIR_DB   = 0.40;   // tolerate gas density up to 1.40 before forcing expansion
+
+  // Jacobi pressure solve: unlike in-place Gauss-Seidel, this reads from pres and
+  // writes to pres2 every iteration, so pressure propagation has no left/right or
+  // top/bottom sweep direction. That was the remaining source of gas drift.
+  for(let iter=0;iter<ITERS;iter++){
+    for(let y=1;y<GH-1;y++) for(let x=1;x<GW-1;x++){
+      const ci=CI(x,y), ct=ctype[ci];
+      if(!isFluid(ct)){pres2[ci]=0;continue;}
+
+      const il=CI(x-1,y), ir=CI(x+1,y), it=CI(x,y-1), ib=CI(x,y+1);
+      const tl=ctype[il], tr=ctype[ir], tt=ctype[it], tb=ctype[ib];
+      const wl=faceInvRho(ci,il,tl), wr=faceInvRho(ci,ir,tr);
+      const wt=faceInvRho(ci,it,tt), wb=faceInvRho(ci,ib,tb);
+      const s=wl+wr+wt+wb;
+      if(s<=0){pres2[ci]=0;continue;}
+
+      const div=u[UI(x+1,y)]-u[UI(x,y)]+v[VI(x,y+1)]-v[VI(x,y)];
+      const expansion = WATER_DENS_K*Math.max(0,liquidCount[ci]/TGT-1.0-WATER_DB) +
+                        AIR_DENS_K*Math.max(0,gasD[ci]-1.0-AIR_DB);
+      const b=div-expansion;
+      const pn = (wl*pres[il] + wr*pres[ir] + wt*pres[it] + wb*pres[ib] - b) / s;
+      // Mild under-relaxation keeps the tiny low-resolution gas solve from ringing.
+      pres2[ci]=pres[ci]*0.15 + pn*0.85;
+    }
+    const tmp=pres; pres=pres2; pres2=tmp;
+  }
+
+  // Pressure is only defined up to a constant. Removing the mean prevents the
+  // diagnostic pressure image from being dominated by an arbitrary offset.
+  let psum=0, pcnt=0;
+  for(let i=0;i<CSIZ;i++) if(isFluid(ctype[i])){psum+=pres[i];pcnt++;}
+  const pmean=pcnt?psum/pcnt:0;
+  for(let i=0;i<CSIZ;i++) solverP[i]=isFluid(ctype[i]) ? pres[i]-pmean : 0;
+
+  // Apply the symmetric pressure gradient to MAC faces once, after the solve.
+  for(let y=0;y<GH;y++) for(let x=1;x<GW;x++){
+    const li=CI(x-1,y), ri=CI(x,y);
+    if(ctype[li]===2||ctype[ri]===2) {u[UI(x,y)]=0;continue;}
+    if(!isFluid(ctype[li]) && !isFluid(ctype[ri])) continue;
+    const w=faceInvRho(li,ri,ctype[ri]);
+    u[UI(x,y)] -= (pres[ri]-pres[li])*w;
+  }
+  for(let y=1;y<GH;y++) for(let x=0;x<GW;x++){
+    const ti=CI(x,y-1), bi=CI(x,y);
+    if(ctype[ti]===2||ctype[bi]===2) {v[VI(x,y)]=0;continue;}
+    if(!isFluid(ctype[ti]) && !isFluid(ctype[bi])) continue;
+    const w=faceInvRho(ti,bi,ctype[bi]);
+    v[VI(x,y)] -= (pres[bi]-pres[ti])*w;
+  }
+
+  enforceSolid();
+}
+// ---- G2P ----
+function g2pLiquid(px,py,pu,pv,n,flip,damp){
+  for(let i=0;i<n;i++){
+    const nu=sU(u,px[i],py[i]),nv=sV(v,px[i],py[i]);
+    const ou=sU(u_old,px[i],py[i]),ov=sV(v_old,px[i],py[i]);
+    pu[i]=(flip*(pu[i]+(nu-ou))+(1-flip)*nu)*damp;
+    pv[i]=(flip*(pv[i]+(nv-ov))+(1-flip)*nv)*damp;
+  }
+}
+function g2p(flip){
+  g2pLiquid(wx,wy,wu,wv,nw,flip,0.997);
+  g2pLiquid(mox,moy,mou,mov,nmo,flip,0.982);   // motor oil: visibly thicker
+  g2pLiquid(minx,miny,minu,minv,nmin,flip,0.989); // mineral oil: oily but lighter
+  g2pLiquid(ex,ey,eu,ev,ne,flip,0.998);        // ethanol: thin/mobile
+  for(let i=0;i<na;i++){
+    const nu=sU(u,ax[i],ay[i]),nv=sV(v,ax[i],ay[i]);
+    const ou=sU(u_old,ax[i],ay[i]),ov=sV(v_old,ax[i],ay[i]);
+    au[i]=flip*(au[i]+(nu-ou))+(1-flip)*nu;
+    av[i]=flip*(av[i]+(nv-ov))+(1-flip)*nv;
+  }
+}
+
+
+// ---- Advect RK2 ----
+function advectLiquid(px,py,pu,pv,n,blend){
+  for(let i=0;i<n;i++){
+    const hx=px[i]+pu[i]*DT*0.5, hy=py[i]+pv[i]*DT*0.5;
+    const gu=sU(u,hx,hy), gv=sV(v,hx,hy);
+    px[i]+=((1-blend)*gu + blend*pu[i])*DT;
+    py[i]+=((1-blend)*gv + blend*pv[i])*DT;
+  }
+}
+function advect(){
+  advectLiquid(wx,wy,wu,wv,nw,PARTICLE_ADVECT_BLEND_W);
+  advectLiquid(mox,moy,mou,mov,nmo,PARTICLE_ADVECT_BLEND_W);
+  advectLiquid(minx,miny,minu,minv,nmin,PARTICLE_ADVECT_BLEND_W);
+  advectLiquid(ex,ey,eu,ev,ne,PARTICLE_ADVECT_BLEND_W);
+  for(let i=0;i<na;i++){
+    const hx=ax[i]+au[i]*DT*0.5, hy=ay[i]+av[i]*DT*0.5;
+    const gu=sU(u,hx,hy), gv=sV(v,hx,hy);
+    ax[i]+=((1-PARTICLE_ADVECT_BLEND_A)*gu + PARTICLE_ADVECT_BLEND_A*au[i])*DT;
+    ay[i]+=((1-PARTICLE_ADVECT_BLEND_A)*gv + PARTICLE_ADVECT_BLEND_A*av[i])*DT;
+  }
+}
+
+
+// ---- Collision resolution ----
+function resolveOne(px_arr,py_arr,pu_arr,pv_arr,n){
+  for(let i=0;i<n;i++){
+    if(px_arr[i]<1.01){px_arr[i]=1.01;if(pu_arr[i]<0)pu_arr[i]=0;}
+    if(px_arr[i]>GW-1.01){px_arr[i]=GW-1.01;if(pu_arr[i]>0)pu_arr[i]=0;}
+    if(py_arr[i]<1.01){py_arr[i]=1.01;if(pv_arr[i]<0)pv_arr[i]=0;}
+    if(py_arr[i]>GH-1.01){py_arr[i]=GH-1.01;if(pv_arr[i]>0)pv_arr[i]=0;}
+    const cx=Math.floor(px_arr[i]),cy=Math.floor(py_arr[i]);
+    if(cx<0||cx>=GW||cy<0||cy>=GH||ctype[CI(cx,cy)]!==2) continue;
+    const fx=px_arr[i]-cx,fy=py_arr[i]-cy;
+    if(Math.min(fx,1-fx)<Math.min(fy,1-fy)){
+      if(fx<0.5){px_arr[i]=cx-0.01;if(pu_arr[i]>0)pu_arr[i]=0;}
+      else{px_arr[i]=cx+1.01;if(pu_arr[i]<0)pu_arr[i]=0;}
+    } else {
+      if(fy<0.5){py_arr[i]=cy-0.01;if(pv_arr[i]>0)pv_arr[i]=0;}
+      else{py_arr[i]=cy+1.01;if(pv_arr[i]<0)pv_arr[i]=0;}
+    }
+  }
+}
+
+// ---- Particle removal ----
+function removeBrushed(px_arr,py_arr,pu_arr,pv_arr,nRef){
+  let n=nRef.val, i=0;
+  while(i<n){
+    const cx=Math.floor(px_arr[i]),cy=Math.floor(py_arr[i]);
+    if(cx>=0&&cx<GW&&cy>=0&&cy<GH&&brushed[CI(cx,cy)]){
+      n--; px_arr[i]=px_arr[n];py_arr[i]=py_arr[n];pu_arr[i]=pu_arr[n];pv_arr[i]=pv_arr[n];
+    } else i++;
+  }
+  nRef.val=n;
+}
+
+function calmLiquidArrayUnderGasPressure(px,py,pu,pv,n){
+  // Stabilizer for the current particle/MAC approximation. A real multiphase solver
+  // would solve gas pressure against a tracked liquid volume fraction. Here, when
+  // high gas pressure overlaps sparse liquid particles, FLIP can fling them upward.
+  // This clamps that numerical spray while leaving normal waves and sloshing alone.
+  for(let i=0;i<n;i++){
+    const cx=Math.floor(px[i]), cy=Math.floor(py[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    const ci=CI(cx,cy);
+    const gasFrac=acount[ci]/TGT;
+    const liqFrac=liquidCount[ci]/TGT;
+    const gd=gasD[ci];
+    const risky=clamp((gasFrac-0.15)*0.32 + (gd-0.9)*0.16,0,1);
+    if(risky<=0) continue;
+
+    const damp=1-risky*0.38;
+    pu[i]*=damp;
+    pv[i]*=damp;
+
+    // Tiny liquid flecks in air-dominant cells should fall back into the body,
+    // not hover or shoot upward because a gas pressure pixel touched them.
+    if(gasFrac>liqFrac && pv[i]<0){
+      pv[i]*=LIQUID_STRAY_DROP_DAMP;
+    }
+
+    const maxSpeed=LIQUID_GAS_MAX_SPEED - Math.min(8,risky*8);
+    const sp=Math.hypot(pu[i],pv[i]);
+    if(sp>maxSpeed){
+      const s=maxSpeed/sp;
+      pu[i]*=s; pv[i]*=s;
+    }
+  }
+}
+
+function calmLiquidsUnderGasPressure(){
+  calmLiquidArrayUnderGasPressure(wx,wy,wu,wv,nw);
+  calmLiquidArrayUnderGasPressure(mox,moy,mou,mov,nmo);
+  calmLiquidArrayUnderGasPressure(minx,miny,minu,minv,nmin);
+  calmLiquidArrayUnderGasPressure(ex,ey,eu,ev,ne);
+}
+
+// ---- CA sand ----
+// The fluid solver treats any cell with ctype===2 as a solid wall. Rather than teach
+// ~20 solver call sites about a new material, we simply stamp sand cells as ctype===2
+// for the duration of the fluid solve and clear them immediately after. Marks are set
+// and cleared over the SAME sand set (before the automaton mutates it), so no phantom
+// solids are left behind. Sand itself is drawn from the sand[] array, independent of
+// ctype, so the transient marking is invisible.
+function markSandSolid(){   let c=0; for(let i=0;i<CSIZ;i++) if(sand[i]){ctype[i]=2;c++;} nsand=c; }
+function unmarkSandSolid(){ for(let i=0;i<CSIZ;i++) if(sand[i]) ctype[i]=0; }
+
+// A grain may move into any interior cell that is not itself sand and not a wall.
+// Liquid/gas/empty are all passable — that is what lets sand sink through water.
+function sandPassable(tx,ty){
+  if(tx<1||tx>GW-2||ty<1||ty>GH-2) return false; // interior only; border is solid
+  const ci=CI(tx,ty);
+  if(sand[ci]) return false;      // one grain per cell
+  if(ctype[ci]===2) return false; // wall (sand marks are cleared before this runs)
+  return true;
+}
+
+function stepSand(){
+  if(nsand<=0) return;
+  // Bottom-to-top so a grain moves at most once per frame; alternate the horizontal
+  // scan direction each frame so piles do not lean.
+  const flip = (frameNo & 1);
+  for(let y=GH-2;y>=1;y--){
+    for(let k=0;k<GW-2;k++){
+      const x = flip ? (GW-2-k) : (1+k);
+      const ci=CI(x,y);
+      if(!sand[ci]) continue;
+      if(sandPassable(x,y+1)){ sand[ci]=0; sand[CI(x,y+1)]=1; continue; } // straight down
+      // Angle of repose: slide diagonally down. Randomize which side is tried first
+      // so slopes are symmetric. Require the side cell to be open too, so grains do
+      // not squeeze through a one-cell-wide diagonal gap (gives a natural ~34-45 deg pile).
+      const s = Math.random()<0.5 ? 1 : -1;
+      if(sandPassable(x+s,y+1) && sandPassable(x+s,y)){ sand[ci]=0; sand[CI(x+s,y+1)]=1; continue; }
+      if(sandPassable(x-s,y+1) && sandPassable(x-s,y)){ sand[ci]=0; sand[CI(x-s,y+1)]=1; continue; }
+    }
+  }
+}
+
+// After grains move, any fluid particle now sharing a cell with sand is pushed to the
+// nearest open cell above (fluid rises as sand sinks). Falls back to a sideways nudge
+// if the column above is blocked. Runs once per frame over all particles — cheap.
+function evictFluidFromSand(){
+  evictFluidArray(wx,wy,wv,nw);
+  evictFluidArray(mox,moy,mov,nmo);
+  evictFluidArray(minx,miny,minv,nmin);
+  evictFluidArray(ex,ey,ev,ne);
+  evictFluidArray(ax,ay,av,na);
+}
+function evictFluidArray(px,py,pv,n){
+  for(let i=0;i<n;i++){
+    const cx=Math.floor(px[i]), cy=Math.floor(py[i]);
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    if(!sand[CI(cx,cy)]) continue;
+    let ty=cy;
+    while(ty>1 && (sand[CI(cx,ty)]||ctype[CI(cx,ty)]===2)) ty--;
+    if(ty>=1 && !sand[CI(cx,ty)] && ctype[CI(cx,ty)]!==2){
+      py[i]=ty+0.5; if(pv[i]>0) pv[i]=0;          // popped up; kill downward velocity
+    } else if(!sand[CI(cx-1,cy)] && ctype[CI(cx-1,cy)]!==2){
+      px[i]=cx-0.5;
+    } else if(!sand[CI(cx+1,cy)] && ctype[CI(cx+1,cy)]!==2){
+      px[i]=cx+0.5;
+    }
+  }
+}
+
+function spawnSand(cx,cy){
+  const ci=CI(cx,cy);
+  if(cx<1||cx>GW-2||cy<1||cy>GH-2) return;
+  if(ctype[ci]===2 || userSolid[ci] || sand[ci]) return; // not into walls or existing sand
+  sand[ci]=1;
+}
+
+// ---- Step ----
+function step(){
+  markSandSolid();          // sand acts as solid walls for the fluid this frame
+  p2g();
+  u_old.set(u); v_old.set(v);
+  applyBodyForces(PARAM_GRAVITY);
+  applyGasExpansion(PARAM_GAS_PRESSURE);
+  applyViscosity(PARAM_VISCOSITY);
+  project();
+  g2p(PARAM_FLIP);
+  // --- Gas/liquid coupling, post-projection ---
+  // NOTE on ordering: these forces modify *particle* velocities after the grid
+  // projection, so they are not themselves made divergence-free. That is fine for
+  // genuine contact coupling (gas pushing on water, gas peeling off a wall), but it
+  // is NOT fine for a second, parallel gas *self*-pressure solver. The simulation
+  // used to run two pressure solvers that did not know about each other: the grid
+  // projection AND a particle-space gas-pressure stack. In a sealed box they fought
+  // each other every frame and pumped energy in — the gas would clump to 16x density
+  // and the water riding the interface never settled.
+  //
+  // applyGasParticlePressure (EOS gradient in particle space) and
+  // applyGasOverpackRedistribution (which also nudged particle *positions*, a hard
+  // divergence violation) were the two offenders. They are redundant with
+  // applyGasExpansion (above, pre-projection, the correct place for gas self-pressure)
+  // so they are removed. The genuine contact-coupling forces below are kept.
+  applyGasPressureToLiquids(PARAM_GAS_PRESSURE); // gas pushes on adjacent liquid (contact-only)
+  calmLiquidsUnderGasPressure();
+  applyGasWallEscape(PARAM_GAS_PRESSURE);        // compressed gas peels off solid walls
+  removeGasBulkDrift();
+  applyInterfaceForces(PARAM_GRAVITY,PARAM_INTERFACE);
+  calmLiquidsUnderGasPressure();
+  advect();
+  separatePhases(PARAM_INTERFACE);
+  resolveOne(wx,wy,wu,wv,nw);
+  resolveOne(mox,moy,mou,mov,nmo);
+  resolveOne(minx,miny,minu,minv,nmin);
+  resolveOne(ex,ey,eu,ev,ne);
+  resolveOne(ax,ay,au,av,na);
+  // Rebuild cell occupancy after the demix pass so rendering shows the sharpened interface
+  // on the same frame instead of one frame later.
+  p2g();
+  // --- CA sand phase ---
+  unmarkSandSolid();   // release this frame's sand-as-solid marks (same set we stamped)
+  stepSand();          // grains fall/slide one cell
+  evictFluidFromSand(); // fluid displaced by sinking grains rises out
+  frameNo++;
+}
+
+// ---- Render ----
+const tmp=document.createElement('canvas');
+tmp.width=GW;tmp.height=GH;
+const tctx=tmp.getContext('2d');
+const img=tctx.createImageData(GW,GH);
+const ip=img.data;
+
+function renderPressure(){
+  let maxGas=0, maxSolv=0;
+  for(let i=0;i<CSIZ;i++){
+    if(gasP[i]>maxGas) maxGas=gasP[i];
+    const sp=Math.abs(solverP[i]); if(sp>maxSolv) maxSolv=sp;
+  }
+  maxGas=Math.max(maxGas,0.01); maxSolv=Math.max(maxSolv,0.01);
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const ci=CI(x,y), pi=(y*GW+x)*4, ct=ctype[ci];
+    if(sand[ci]){ip[pi]=150;ip[pi+1]=132;ip[pi+2]=92;ip[pi+3]=255;continue;}
+    if(ct===2){ip[pi]=60;ip[pi+1]=60;ip[pi+2]=70;ip[pi+3]=255;continue;}
+    const gp=Math.min(1,gasP[ci]/maxGas);
+    const pp=Math.min(1,Math.abs(solverP[ci])/maxSolv);
+    const wc=Math.min(1,Math.max(0,liquidCount[ci]/TGT-1));
+    // Gas pressure = warm/red. Projection/water compression = cool/blue-white.
+    ip[pi]  = Math.round(12 + gp*215 + wc*30 + pp*35);
+    ip[pi+1]= Math.round(12 + gp*80  + pp*115);
+    ip[pi+2]= Math.round(22 + pp*190 + wc*80);
+    ip[pi+3]=255;
+  }
+  tctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tmp,0,0,GW*CS,GH*CS);
+}
+
+function renderPhase(){
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const ci=CI(x,y), pi=(y*GW+x)*4, ct=ctype[ci];
+    if(sand[ci]){ip[pi]=190;ip[pi+1]=168;ip[pi+2]=110;ip[pi+3]=255;}
+    else if(ct===2){ip[pi]=80;ip[pi+1]=80;ip[pi+2]=90;ip[pi+3]=255;}
+    else if(liquidCount[ci]>0 && acount[ci]>0){ip[pi]=20;ip[pi+1]=180;ip[pi+2]=165;ip[pi+3]=255;}
+    else if(acount[ci]>0){ip[pi]=210;ip[pi+1]=120;ip[pi+2]=35;ip[pi+3]=255;}
+    else if(liquidCount[ci]>0){
+      const mat=domMat[ci];
+      if(mat===MAT_WATER){ip[pi]=20;ip[pi+1]=95;ip[pi+2]=220;}
+      else if(mat===MAT_MOTOR){ip[pi]=75;ip[pi+1]=52;ip[pi+2]=30;}
+      else if(mat===MAT_MINERAL){ip[pi]=190;ip[pi+1]=145;ip[pi+2]=45;}
+      else {ip[pi]=145;ip[pi+1]=75;ip[pi+2]=190;}
+      ip[pi+3]=255;
+    }
+    else {ip[pi]=12;ip[pi+1]=12;ip[pi+2]=20;ip[pi+3]=255;}
+  }
+  tctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tmp,0,0,GW*CS,GH*CS);
+}
+
+
+function liquidColor(ci, sp){
+  const mat=domMat[ci];
+  const fill=Math.min(1.8,liquidCount[ci]/TGT);
+  if(mat===MAT_WATER) return [Math.round(8+sp*70), Math.round(65+fill*75+sp*50), Math.round(185+fill*30-sp*20)];
+  if(mat===MAT_MOTOR) return [Math.round(44+fill*32+sp*35), Math.round(35+fill*24+sp*18), Math.round(24+fill*12)];
+  if(mat===MAT_MINERAL) return [Math.round(135+fill*55+sp*25), Math.round(105+fill*45+sp*22), Math.round(28+fill*18)];
+  if(mat===MAT_ETHANOL) return [Math.round(95+fill*40+sp*30), Math.round(58+fill*55+sp*30), Math.round(155+fill*55)];
+  return [70,80,100];
+}
+
+function render(){
+  const mode=document.getElementById('view-mode').value;
+  if(mode==='pressure'){renderPressure();return;}
+  if(mode==='phase'){renderPhase();return;}
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const ci=CI(x,y),pi=(y*GW+x)*4,ct=ctype[ci];
+    if(sand[ci]){
+      // Warm tan with a deterministic per-cell dither so a pile reads as grains,
+      // not a flat block. Hash of (x,y) keeps the speckle stable frame to frame.
+      const h=((x*73856093)^(y*19349663))&0xff, d=(h>>4)-8;
+      ip[pi]=198+d; ip[pi+1]=170+d; ip[pi+2]=112+((h&7)-3); ip[pi+3]=255;
+    } else if(ct===2){
+      const us=userSolid[ci];
+      ip[pi]=us?88:52;ip[pi+1]=us?90:52;ip[pi+2]=us?105:65;ip[pi+3]=255;
+    } else if(ct===1){
+      // liquid-dominant cell. Color uses the dominant liquid material while the
+      // solver uses the density-weighted mixture.
+      const sp=Math.min(1,(Math.abs(u[UI(x,y)]+u[UI(x+1,y)])+Math.abs(v[VI(x,y)]+v[VI(x,y+1)]))*0.05);
+      const col=liquidColor(ci,sp);
+      ip[pi]=col[0];ip[pi+1]=col[1];ip[pi+2]=col[2];ip[pi+3]=255;
+    } else if(ct===3){
+      // air-dominant cell — dark. Tiny water contamination is not rendered as a
+      // full water/foam cell; the particle will still fall due to the demix pass.
+      ip[pi]=18;ip[pi+1]=22;ip[pi+2]=38;ip[pi+3]=255;
+    } else if(ct===4){
+      // narrow true interface only
+      const wf=liquidCount[ci]/(liquidCount[ci]+acount[ci]+0.001);
+      const foam=Math.abs(wf-0.5)<0.18 ? 1 : 0;
+      ip[pi]=Math.round(14+foam*18);ip[pi+1]=Math.round(78+foam*52);
+      ip[pi+2]=Math.round(130+foam*42);ip[pi+3]=255;
+    } else {
+      // empty
+      ip[pi]=12;ip[pi+1]=12;ip[pi+2]=20;ip[pi+3]=255;
+    }
+  }
+  tctx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(tmp,0,0,GW*CS,GH*CS);
+}
+
+// ---- Tools ----
+let tool='water', painting=false;
+const ALL_TOOLS=['water','motor','mineral','ethanol','air','wall','sand','rmwater','erase'];
+function setTool(t){
+  tool=t;
+  ALL_TOOLS.forEach(id=>{
+    const b=document.getElementById('b-'+id);if(!b)return;
+    const on=id===t;
+    b.style.cssText=`padding:4px 10px;border-radius:5px;cursor:pointer;font-family:var(--font-sans);font-size:12px;`
+      +`border:0.5px solid ${on?'#185FA5':'var(--color-border-secondary)'};`
+      +`background:${on?'#B5D4F4':'var(--color-background-primary)'};`
+      +`color:${on?'#0C447C':'var(--color-text-primary)'}`;
+  });
+}
+setTool('water');
+window.setTool=setTool;
+
+function spawnLiquid(cx,cy,kind){
+  if(ctype[CI(cx,cy)]===2) return;
+  let px,py,pu,pv,n,max;
+  if(kind==='water'){px=wx;py=wy;pu=wu;pv=wv;n=nw;max=MAX_W;}
+  else if(kind==='motor'){px=mox;py=moy;pu=mou;pv=mov;n=nmo;max=MAX_O;}
+  else if(kind==='mineral'){px=minx;py=miny;pu=minu;pv=minv;n=nmin;max=MAX_O;}
+  else {px=ex;py=ey;pu=eu;pv=ev;n=ne;max=MAX_E;}
+  for(let k=0;k<TGT&&n<max;k++){
+    px[n]=cx+0.1+Math.random()*0.8; py[n]=cy+0.1+Math.random()*0.8;
+    pu[n]=0; pv[n]=0; n++;
+  }
+  if(kind==='water') nw=n;
+  else if(kind==='motor') nmo=n;
+  else if(kind==='mineral') nmin=n;
+  else ne=n;
+}
+function spawnW(cx,cy){ spawnLiquid(cx,cy,'water'); }
+
+function spawnA(cx,cy){
+  if(na>=MAX_A||ctype[CI(cx,cy)]===2) return;
+  for(let k=0;k<TGT&&na<MAX_A;k++){
+    ax[na]=cx+0.1+Math.random()*0.8; ay[na]=cy+0.1+Math.random()*0.8;
+    au[na]=(Math.random()-0.5)*0.35; av[na]=(Math.random()-0.5)*0.35; na++;
+  }
+}
+
+function rebuildAirBrushCounts(){
+  // Rebuild just the air occupancy after the brush displacement step. acount from
+  // the last solver pass is stale after particles are shoved outward, so the brush
+  // density cap needs a fresh count before it decides whether to spawn more gas.
+  acount.fill(0);
+  for(let i=0;i<na;i++){
+    const cx=Math.floor(ax[i]), cy=Math.floor(ay[i]);
+    if(cx>=0&&cx<GW&&cy>=0&&cy<GH) acount[CI(cx,cy)]++;
+  }
+}
+
+function spawnABrushCapped(cx,cy){
+  // Additive air brush: keep existing air, but do not create a numerical bomb by
+  // injecting unlimited gas into one cell. Existing overpacked gas is not deleted;
+  // the brush simply refuses to add more until local density drops below the cap.
+  if(na>=MAX_A||ctype[CI(cx,cy)]===2) return;
+  const ci=CI(cx,cy);
+  const cap=Math.max(TGT, Math.floor(TGT*AIR_BRUSH_MAX_MULT));
+  const add=Math.min(TGT, Math.max(0, cap-acount[ci]));
+  for(let k=0;k<add&&na<MAX_A;k++){
+    ax[na]=cx+0.1+Math.random()*0.8; ay[na]=cy+0.1+Math.random()*0.8;
+    au[na]=(Math.random()-0.5)*0.35; av[na]=(Math.random()-0.5)*0.35; na++;
+    acount[ci]++;
+  }
+}
+
+function getGrid(e){
+  const r=canvas.getBoundingClientRect();
+  return[Math.floor((e.clientX-r.left)/r.width*GW),Math.floor((e.clientY-r.top)/r.height*GH)];
+}
+
+function clearParticlesInCells(cells, liquids=true, air=true){
+  for(const[cx,cy] of cells){ if(ctype[CI(cx,cy)]!==2) brushed[CI(cx,cy)]=1; }
+  if(liquids){
+    let r={val:nw}; removeBrushed(wx,wy,wu,wv,r); nw=r.val;
+    r={val:nmo}; removeBrushed(mox,moy,mou,mov,r); nmo=r.val;
+    r={val:nmin}; removeBrushed(minx,miny,minu,minv,r); nmin=r.val;
+    r={val:ne}; removeBrushed(ex,ey,eu,ev,r); ne=r.val;
+  }
+  if(air){ const anr={val:na}; removeBrushed(ax,ay,au,av,anr); na=anr.val; }
+  for(const[cx,cy] of cells) brushed[CI(cx,cy)]=0;
+}
+
+
+function getBrushRadius(){
+  const el=document.getElementById('sl-brush');
+  return clamp(el ? +el.value : 2, BRUSH_MIN, BRUSH_MAX);
+}
+
+function isSolidAtPos(x,y){
+  const cx=Math.floor(x), cy=Math.floor(y);
+  return cx<1||cx>GW-2||cy<1||cy>GH-2||ctype[CI(cx,cy)]===2;
+}
+
+function pushArrayFromBrush(px,py,pu,pv,n,gx,gy,R,velScale=1){
+  // Used by the air brush. New gas volume should displace old particles instead
+  // of deleting them. This keeps material/mass continuity while still avoiding a
+  // huge one-frame overlap spike at the brush center.
+  const cx=gx+0.5, cy=gy+0.5;
+  const radius=R+0.95;
+  for(let i=0;i<n;i++){
+    let dx=px[i]-cx, dy=py[i]-cy;
+    let d=Math.hypot(dx,dy);
+    if(d>=radius) continue;
+    if(d<1e-4){
+      const a=(i*12.9898 + frameNo*78.233) % 6.28318530718;
+      dx=Math.cos(a); dy=Math.sin(a); d=1.0;
+    }
+    const nx=dx/d, ny=dy/d;
+    const t=1.0-d/radius;
+    const push=(radius-d)*INJECTION_PUSH_POS + 0.08;
+    const nxp=clamp(px[i]+nx*push,1.01,GW-1.01);
+    const nyp=clamp(py[i]+ny*push,1.01,GH-1.01);
+    if(!isSolidAtPos(nxp,nyp)){
+      px[i]=nxp; py[i]=nyp;
+    }
+    const impulse=INJECTION_PUSH_VEL*velScale*t;
+    pu[i]=clamp(pu[i]+nx*impulse,-65,65);
+    pv[i]=clamp(pv[i]+ny*impulse,-65,65);
+  }
+}
+
+function displaceForAirInjection(gx,gy,R){
+  // Do not erase existing air when brushing more air. Shove every material out of
+  // the injected volume instead of deleting it, so the brush behaves like adding
+  // gas mass through a nozzle.
+  pushArrayFromBrush(ax,ay,au,av,na,gx,gy,R,1.00);
+  pushArrayFromBrush(wx,wy,wu,wv,nw,gx,gy,R,0.75);
+  pushArrayFromBrush(mox,moy,mou,mov,nmo,gx,gy,R,0.70);
+  pushArrayFromBrush(minx,miny,minu,minv,nmin,gx,gy,R,0.70);
+  pushArrayFromBrush(ex,ey,eu,ev,ne,gx,gy,R,0.78);
+}
+
+
+function doPaint(e){
+  const[gx,gy]=getGrid(e),R=getBrushRadius();
+  const cells=[];
+  for(let dy=-R;dy<=R;dy++) for(let dx=-R;dx<=R;dx++){
+    if(dx*dx+dy*dy>R*R+1) continue;
+    const cx=gx+dx,cy=gy+dy;
+    if(cx<1||cx>GW-2||cy<1||cy>GH-2) continue;
+    cells.push([cx,cy]);
+  }
+
+  if(tool==='water'||tool==='motor'||tool==='mineral'||tool==='ethanol'){
+    // Painting a liquid removes local gas but does not delete other liquids.
+    clearParticlesInCells(cells,false,true);
+    for(const[cx,cy] of cells) spawnLiquid(cx,cy,tool);
+  } else if(tool==='air'){
+    // Painting gas is additive now: it does not erase existing gas or liquids.
+    displaceForAirInjection(gx,gy,R);
+    rebuildAirBrushCounts();
+    for(const[cx,cy] of cells){ if(ctype[CI(cx,cy)]!==2) spawnABrushCapped(cx,cy); }
+  } else if(tool==='sand'){
+    // A grain fills a cell, so clear fluid there first, then drop sand.
+    clearParticlesInCells(cells,true,true);
+    for(const[cx,cy] of cells) spawnSand(cx,cy);
+  } else if(tool==='rmwater'){
+    clearParticlesInCells(cells,true,false);
+  } else if(tool==='wall'){
+    // Solids occupy volume: remove fluid particles before marking wall cells.
+    clearParticlesInCells(cells,true,true);
+    for(const[cx,cy] of cells){
+      const ci=CI(cx,cy); ctype[ci]=2; userSolid[ci]=1; sand[ci]=0;
+    }
+  } else if(tool==='erase'){
+    for(const[cx,cy] of cells){
+      const ci=CI(cx,cy);
+      if(userSolid[ci]){ctype[ci]=0;userSolid[ci]=0;}
+      sand[ci]=0;   // erase tool also clears sand
+    }
+  }
+}
+
+
+canvas.addEventListener('mousedown',e=>{painting=true;doPaint(e);});
+canvas.addEventListener('mousemove',e=>{if(painting)doPaint(e);});
+window.addEventListener('mouseup',()=>painting=false);
+canvas.addEventListener('touchstart',e=>{painting=true;doPaint(e.touches[0]);e.preventDefault();},{passive:false});
+canvas.addEventListener('touchmove',e=>{if(painting)doPaint(e.touches[0]);e.preventDefault();},{passive:false});
+canvas.addEventListener('touchend',()=>painting=false);
+
+function clearAll(){
+  nw=0;nmo=0;nmin=0;ne=0;na=0;u.fill(0);v.fill(0);
+  sand.fill(0);nsand=0;
+  for(let i=0;i<CSIZ;i++) if(ctype[i]!==2||userSolid[i]) {if(userSolid[i]){ctype[i]=2;}else ctype[i]=0;}
+  initBorder();
+  for(let i=0;i<CSIZ;i++) if(userSolid[i]) ctype[i]=2;
+}
+window.clearAll=clearAll;
+
+document.getElementById('sl-brush').oninput=e=>document.getElementById('brushv').textContent=e.target.value;
+
+let lastT=0,fc=0,fa=0;
+function loop(ts){
+  const el=Math.min((ts-lastT)/1000,0.05);lastT=ts;fc++;fa+=el;
+  if(fa>0.5){
+    document.getElementById('fps-el').textContent=Math.round(fc/fa);
+    document.getElementById('pct-el').textContent=nw.toLocaleString()+'w '+nmo.toLocaleString()+'mo '+nmin.toLocaleString()+'min '+ne.toLocaleString()+'e + '+na.toLocaleString()+'a · '+nsand.toLocaleString()+' sand';
+    fc=fa=0;
+  }
+  step();render();requestAnimationFrame(loop);
+}
+for (let y = GH - 9; y < GH - 1; y++) {
+  for (let x = 22; x < 58; x++) spawnW(x, y);
+}
+document.getElementById("back").onclick = function () {
+  location.href = "arcade.html";
+};
+window.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") location.href = "arcade.html";
+});
+requestAnimationFrame(loop);
+</script>
     </div>
-    <script>
-      (function () {
-        var W = 700, H = 476;
-        var glCanvas = document.getElementById("gl");
-        var ui = document.getElementById("ui");
-        var uix = ui.getContext("2d");
-        var worker = null;
-        var particles = new Float32Array(0);
-        var cups = [];
-        var gy = 1;
-        var won = false;
-        var wins = 0;
-        var started = Date.now();
-        var reported = false;
-        var pouring = false;
-        var last = null;
-        var glapi = null;
-
-        function sf() { return window.sandforge || window.sandforgeAPI || null; }
-        function invoke() {
-          var b = sf();
-          if (!b || !b.invoke) return Promise.reject();
-          return b.invoke.apply(b, arguments);
-        }
-        function hud() {
-          var filled = 0;
-          for (var i = 0; i < cups.length; i++) {
-            if (cups[i].n >= (cups[i].need || 42)) filled += 1;
-          }
-          document.getElementById("cups").textContent = String(filled);
-          document.getElementById("drops").textContent = String((particles.length / 3) | 0);
-          document.getElementById("wins").textContent = String(wins);
-        }
-        function pos(ev) {
-          var r = ui.getBoundingClientRect();
-          return {
-            x: ((ev.clientX - r.left) / r.width) * W,
-            y: ((ev.clientY - r.top) / r.height) * H,
-          };
-        }
-        function send(msg) {
-          if (worker) worker.postMessage(msg);
-        }
-
-        function compile(gl, type, src) {
-          var sh = gl.createShader(type);
-          gl.shaderSource(sh, src);
-          gl.compileShader(sh);
-          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-            console.error(gl.getShaderInfoLog(sh));
-            return null;
-          }
-          return sh;
-        }
-        function program(gl, vs, fs) {
-          var p = gl.createProgram();
-          gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vs));
-          gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fs));
-          gl.linkProgram(p);
-          if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-            console.error(gl.getProgramInfoLog(p));
-            return null;
-          }
-          return p;
-        }
-
-        function drawCanvasFallback(data) {
-          var ctx = glCanvas.getContext("2d");
-          if (!ctx) return;
-          ctx.fillStyle = "#072028";
-          ctx.fillRect(0, 0, W, H);
-          ctx.filter = "blur(7px) contrast(220%)";
-          for (var i = 0; i < data.length; i += 3) {
-            var spd = data[i + 2] || 0;
-            ctx.fillStyle = spd > 80 ? "rgba(200,245,255,0.55)" : "rgba(40,190,220,0.5)";
-            ctx.beginPath();
-            ctx.arc(data[i], data[i + 1], 11, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          ctx.filter = "none";
-        }
-
-        function makeGL() {
-          var gl = glCanvas.getContext("webgl", { premultipliedAlpha: false, alpha: true, antialias: false });
-          if (!gl) return null;
-          var ext = gl.getExtension("OES_texture_float");
-          var splat = program(
-            gl,
-            "attribute vec2 a_pos; attribute float a_spd; uniform vec2 u_res; uniform float u_size; varying float v_spd; void main(){ vec2 clip=vec2((a_pos.x/u_res.x)*2.0-1.0, 1.0-(a_pos.y/u_res.y)*2.0); gl_Position=vec4(clip,0.0,1.0); gl_PointSize=u_size; v_spd=a_spd; }",
-            "precision mediump float; varying float v_spd; void main(){ vec2 p=gl_PointCoord*2.0-1.0; float d=dot(p,p); if(d>1.0) discard; float a=exp(-d*2.8); gl_FragColor=vec4(a, a*(0.45+v_spd*0.03), 0.0, a); }",
-          );
-          var blit = program(
-            gl,
-            "attribute vec2 a_quad; varying vec2 v_uv; void main(){ v_uv=a_quad*0.5+0.5; gl_Position=vec4(a_quad,0.0,1.0); }",
-            "precision mediump float; varying vec2 v_uv; uniform sampler2D u_tex; uniform vec2 u_res; void main(){ vec4 s=texture2D(u_tex,v_uv); float f=s.r; if(f<0.42) discard; float edge=smoothstep(0.42,0.78,f); float foam=clamp(s.g-0.25,0.0,1.0); vec3 deep=vec3(0.05,0.28,0.38); vec3 mid=vec3(0.18,0.72,0.88); vec3 hi=vec3(0.78,0.96,1.0); vec3 col=mix(deep,mid,edge); col=mix(col,hi,foam*0.55*edge); float spec=smoothstep(0.72,0.95,f)*0.35; col+=spec; gl_FragColor=vec4(col,0.92); }",
-          );
-          if (!splat || !blit) return null;
-          var fbo = gl.createFramebuffer();
-          var tex = gl.createTexture();
-          gl.bindTexture(gl.TEXTURE_2D, tex);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-          var buf = gl.createBuffer();
-          var quad = gl.createBuffer();
-          gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-          var posLoc = gl.getAttribLocation(splat, "a_pos");
-          var spdLoc = gl.getAttribLocation(splat, "a_spd");
-          var qLoc = gl.getAttribLocation(blit, "a_quad");
-          return {
-            draw: function (data) {
-              var count = (data.length / 3) | 0;
-              gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-              gl.viewport(0, 0, W, H);
-              gl.clearColor(0, 0, 0, 0);
-              gl.clear(gl.COLOR_BUFFER_BIT);
-              gl.enable(gl.BLEND);
-              gl.blendFunc(gl.ONE, gl.ONE);
-              gl.useProgram(splat);
-              gl.uniform2f(gl.getUniformLocation(splat, "u_res"), W, H);
-              gl.uniform1f(gl.getUniformLocation(splat, "u_size"), 42);
-              gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-              gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
-              gl.enableVertexAttribArray(posLoc);
-              gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 12, 0);
-              if (spdLoc >= 0) {
-                gl.enableVertexAttribArray(spdLoc);
-                gl.vertexAttribPointer(spdLoc, 1, gl.FLOAT, false, 12, 8);
-              }
-              gl.drawArrays(gl.POINTS, 0, count);
-              gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-              gl.viewport(0, 0, W, H);
-              gl.clearColor(0.027, 0.125, 0.157, 1);
-              gl.clear(gl.COLOR_BUFFER_BIT);
-              gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-              gl.useProgram(blit);
-              gl.activeTexture(gl.TEXTURE0);
-              gl.bindTexture(gl.TEXTURE_2D, tex);
-              gl.uniform1i(gl.getUniformLocation(blit, "u_tex"), 0);
-              gl.uniform2f(gl.getUniformLocation(blit, "u_res"), W, H);
-              gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-              gl.enableVertexAttribArray(qLoc);
-              gl.vertexAttribPointer(qLoc, 2, gl.FLOAT, false, 0, 0);
-              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            },
-          };
-        }
-
-        function drawCups() {
-          uix.clearRect(0, 0, W, H);
-          cups.forEach(function (c) {
-            var left = c.x - c.w / 2;
-            var top = c.y - c.h;
-            uix.strokeStyle = c.n >= c.need ? "#ffe700" : "rgba(126,232,255,0.85)";
-            uix.lineWidth = 3;
-            uix.beginPath();
-            uix.moveTo(left, top);
-            uix.lineTo(left, c.y);
-            uix.lineTo(left + c.w, c.y);
-            uix.lineTo(left + c.w, top);
-            uix.stroke();
-          });
-          if (won) {
-            uix.fillStyle = "rgba(6,16,20,0.45)";
-            uix.fillRect(0, 0, W, H);
-            uix.fillStyle = "#7ee8ff";
-            uix.font = "700 28px Segoe UI,sans-serif";
-            uix.textAlign = "center";
-            uix.fillText("CUPS FULL", W / 2, H / 2);
-          }
-        }
-
-        function onState(msg) {
-          particles = msg.particles || particles;
-          cups = msg.cups || cups;
-          gy = msg.gy;
-          if (msg.won && !won) {
-            won = true;
-            if (!reported) {
-              reported = true;
-              wins += 1;
-              invoke("sandforge.example:arcade-score", {
-                game: "puddle",
-                win: true,
-                time: Math.max(1, Math.floor((Date.now() - started) / 1000)),
-              }).catch(function () {});
-            }
-          }
-          hud();
-          if (glapi) glapi.draw(particles);
-          else drawCanvasFallback(particles);
-          drawCups();
-        }
-
-        function startWorker() {
-          if (worker) worker.terminate();
-          worker = new Worker("puddle-worker.js");
-          worker.onmessage = function (ev) {
-            if (ev.data && ev.data.type === "state") onState(ev.data);
-          };
-          worker.onerror = function (err) {
-            console.error("[puddle] worker", err);
-          };
-          won = false;
-          reported = false;
-          started = Date.now();
-          send({ type: "init", w: W, h: H });
-        }
-
-        glapi = makeGL();
-        ui.addEventListener("mousedown", function (e) {
-          pouring = true;
-          last = pos(e);
-          send({ type: "pour", x: last.x, y: last.y });
-        });
-        window.addEventListener("mouseup", function () {
-          pouring = false;
-          last = null;
-        });
-        ui.addEventListener("mousemove", function (e) {
-          if (!pouring) return;
-          var p = pos(e);
-          if (last) send({ type: "stir", x: p.x, y: p.y, dx: p.x - last.x, dy: p.y - last.y });
-          send({ type: "pour", x: p.x, y: p.y });
-          last = p;
-        });
-        document.getElementById("flip").onclick = function () { send({ type: "flip" }); };
-        document.getElementById("new").onclick = function () {
-          won = false;
-          reported = false;
-          started = Date.now();
-          send({ type: "reset" });
-        };
-        document.getElementById("back").onclick = function () {
-          if (worker) worker.terminate();
-          location.href = "arcade.html";
-        };
-        window.addEventListener("keydown", function (e) {
-          if (e.key === "Escape") {
-            if (worker) worker.terminate();
-            location.href = "arcade.html";
-          }
-          if (e.key === " " || e.key === "f" || e.key === "F") {
-            e.preventDefault();
-            send({ type: "flip" });
-          }
-          if (e.key === "n" || e.key === "N") send({ type: "reset" });
-        });
-        window.addEventListener("beforeunload", function () {
-          if (worker) worker.terminate();
-        });
-        setInterval(function () {
-          send({ type: "tick", steps: 3 });
-        }, 16);
-        startWorker();
-        (function boot(n) {
-          var b = sf();
-          if (b && b.invoke) {
-            invoke("sandforge.example:arcade-boot").then(function (s) {
-              wins = (s && s.puddleWins) || 0;
-              hud();
-            }).catch(function () {});
-            return;
-          }
-          if (n < 80) setTimeout(function () { boot(n + 1); }, 50);
-        })(0);
-      })();
-    </script>
   </body>
 </html>

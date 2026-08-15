@@ -24,11 +24,13 @@
 }
 
 #sf-example-overlay .sf-ex-panel {
-  width: min(720px, calc(100vw - 32px));
-  max-height: min(84vh, 760px);
+  width: min(860px, calc(100vw - 32px));
+  max-height: min(88vh, 800px);
   display: flex;
   flex-direction: column;
-  background: rgba(0, 0, 0, 0.94);
+  background:
+    linear-gradient(145deg, rgba(255, 231, 0, 0.035), transparent 34%),
+    rgba(0, 0, 0, 0.96);
   border: 1px solid rgba(203, 213, 225, 0.86);
   border-radius: 2px 12px 2px 12px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
@@ -55,6 +57,26 @@
 
 #sf-example-overlay .sf-ex-header h2.inactive {
   color: #cbd5e1;
+}
+
+#sf-example-overlay .sf-ex-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#sf-example-overlay .sf-ex-api-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid rgba(255, 231, 0, 0.5);
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #ffe700;
+  background: rgba(255, 231, 0, 0.08);
+  font: 700 10px/1 ui-monospace, "Cascadia Code", Consolas, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 #sf-example-overlay .sf-ex-sub {
@@ -88,6 +110,10 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+  padding: 8px;
+  background: rgba(12, 16, 22, 0.82);
+  border: 1px solid rgba(100, 116, 139, 0.42);
+  border-radius: 2px 12px 2px 12px;
   flex-shrink: 0;
 }
 
@@ -116,7 +142,20 @@
   overflow: auto;
   flex: 1;
   min-height: 0;
-  padding-right: 2px;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
+}
+
+#sf-example-overlay .sf-ex-body.api-view {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+
+#sf-example-overlay .sf-ex-body.api-view > .sf-ex-sub {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 #sf-example-overlay .sf-ex-grid {
@@ -158,6 +197,14 @@
   margin: 0 0 16px;
 }
 
+#sf-example-overlay .sf-ex-body.api-view .sf-ex-group {
+  margin: 0;
+  padding: 12px;
+  background: rgba(12, 16, 22, 0.56);
+  border: 1px solid rgba(100, 116, 139, 0.36);
+  border-radius: 2px 12px 2px 12px;
+}
+
 #sf-example-overlay .sf-ex-group h3 {
   margin: 0 0 8px;
   font-size: 12px;
@@ -179,6 +226,7 @@
   color: #ffe700;
   font-size: 12px;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  overflow-wrap: anywhere;
 }
 
 #sf-example-overlay .sf-ex-item p {
@@ -217,6 +265,13 @@
   color: #080804;
 }
 
+#sf-example-overlay .sf-ex-btn.author {
+  margin-right: auto;
+  border-color: rgba(255, 231, 0, 0.5);
+  color: #ffe700;
+  text-transform: none;
+}
+
 #sf-example-overlay .sf-ex-btn:hover {
   border-color: #ffe700;
   color: #ffe700;
@@ -225,4 +280,28 @@
 #sf-example-overlay .sf-ex-btn.primary:hover {
   color: #080804;
   filter: brightness(1.05);
+}
+
+@media (max-width: 720px) {
+  #sf-example-overlay .sf-ex-panel {
+    padding: 16px;
+  }
+
+  #sf-example-overlay .sf-ex-body.api-view {
+    grid-template-columns: 1fr;
+  }
+
+  #sf-example-overlay .sf-ex-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  #sf-example-overlay .sf-ex-tab {
+    white-space: nowrap;
+  }
+
+  #sf-example-overlay .sf-ex-btn.author {
+    width: 100%;
+    margin-right: 0;
+  }
 }

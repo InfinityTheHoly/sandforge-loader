@@ -1,14 +1,41 @@
 # SandForge API
 
-Three worlds, one contract. `window.sandforge` in the game, `module.exports = function (api)` in Electron, `self.sandforge` in workers.
+SandForge exposes related APIs in three runtimes:
 
-**Rule:** same method name and arguments in every world. If it talks to disk, net, Steam, or another process, it returns a **Promise** in the game and in workers. Only Electron is sync.
+- Electron: `module.exports = function (api)`
+- Game renderer: `window.sandforge`
+- Game workers: `self.sandforge`
 
-Capture the API when your entry runs (`const api = window.sandforge`). `api.bind(modId)` returns a copy whose `store` / `settings` / `assets` stay on that id. Do not read `window.__SF_CURRENT_MOD__`.
+Shared methods use the same names and arguments where possible, but each
+runtime has different capabilities. Calls that cross from the game or a worker
+into Electron return a **Promise**. Electron methods are not IPC-wrapped, but
+their native return values may still be promises (for example network and
+dialog methods).
+
+In a game entrypoint, capture the API when your entry runs
+(`const api = window.sandforge`). `api.bind(modId)` returns a copy whose
+`store` / `settings` / `assets` stay on that id. Do not read
+`window.__SF_CURRENT_MOD__`.
 
 Detect: `window.SandforgeLoader.has()` (the loader sets this). Also `window.__SF_HOST__`.
 
 Official Sandkit still works. This API sits on top of it.
+
+## Runtime overview
+
+| Capability | Electron | Game | Worker |
+| --- | --- | --- | --- |
+| Sandkit/game APIs | No | Direct | Worker Sandkit API |
+| Files, network, Steam | Direct API | Async IPC | Async RPC subset |
+| Store and settings | Direct API | Async IPC | Raw RPC only |
+| Windows and dialogs | Direct API | Async IPC | Raw RPC only |
+| Anvil patcher | Full API | Async subset | Raw RPC for string patches |
+| Node.js / `require()` | Yes | No | No |
+
+Jump to [Electron](#electron-entryelectronjs),
+[Game](#game-entrygamejs), [Worker](#worker-entryworkerjs),
+[`sandforge://` assets](#sandforge-assets), or
+[manifest fields](#manifest-extras).
 
 **Canonical names** (aliases still work, do not use them in new code):
 
@@ -25,7 +52,10 @@ Official Sandkit still works. This API sits on top of it.
 
 **Electron plugins have full Node.** `api.fs`, `api.shell`, and `api.net` are sandboxed to local mods, Workshop folders, `%AppData%\Roaming\sandustry`, and the loader directory. Network is http/https only (8 MB GET, 32 MB download). Game-world copies of those methods go through IPC and are async.
 
-Errors are `SandforgeError` with `err.code`: `PATCH_SEALED`, `PATH_DENIED`, `PATH_INVALID`, `UNKNOWN_MOD`, `UNKNOWN_API`, `NO_HANDLER`, `IPC_INVOKE`.
+Loader errors are `SandforgeError` instances with an `err.code` value:
+`PATCH_SEALED`, `PATCH_NEEDS_FIND`, `MATCH_COUNT`, `PATH_DENIED`,
+`PATH_INVALID`, `UNKNOWN_MOD`, `UNKNOWN_API`, `NO_WINDOW`, `NO_HANDLER`,
+`IPC_INVOKE`, or `RELOAD`.
 
 ---
 
@@ -50,23 +80,30 @@ module.exports = function (api) {
 | `api.log(level, message)` | console |
 | `api.log(level, tag, message)` | tagged console |
 
-`api.mod.source` is `"local"` or `"workshop"`. `write` / `list` stay inside that mod’s folder.
+`api.mod.source` is `"local"` or `"workshop"`. `write` / `list` stay inside
+that mod’s folder; `list` returns `{ name, isDirectory, isFile }[]`.
 
 ### `api.app`
 
-`version`, `loaderVersion`, `platform`, `arch`, `electron`, `chrome`, `node`, `pid`, `isPackaged`, `getLocale()`, `whenReady()`, `relaunch()`, `quit()`.
+`version`, `loaderVersion`, `platform`, `arch`, `electron`, `chrome`, `node`,
+`pid`, `maxMapDimension`, `isPackaged`, `getLocale()`, `whenReady()`,
+`relaunch()`, `quit()`. Renderer `api.app.info()` resolves to the runtime
+identity fields plus the configured `maxMapDimension`.
 
 ### `api.paths`
 
 `loader`, `game`, `asar`, `ui`, `mods`, `data`, `workshop`, `saves`, `maps`, `meta`, `store`, `steamAppId`, `get()`.
 
 `workshop` is an array of roots. `saves` / `maps` / `meta` / `store` are under `%AppData%\Roaming\sandustry`.
+`get()` returns the portable subset: `loader`, `game`, `asar`, `ui`, `mods`,
+`data`, `workshop`, and `steamAppId`.
 
 ### `api.fs` (sandboxed)
 
 `resolve`, `exists`, `stat`, `readText`, `readJson`, `readBinary`, `write`, `writeJson`, `append`, `mkdir`, `remove`, `copy`, `list`, `hash`.
 
 Relative paths resolve under the local mods folder. Absolute paths must stay inside allowed roots. `remove` is recursive.
+`list()` returns `{ name, isDirectory, isFile }[]`.
 
 ### `api.store`
 
@@ -74,13 +111,22 @@ Per-mod JSON at `%AppData%\Roaming\sandustry\mod-store\<id>.json`.
 
 `get(key, fallback)`, `get()` whole object, `set(key, value)`, `set(object)`, `remove(key)`, `clear()`.
 
+Bulk `set(object)` is available in Electron. The game IPC facade uses
+`set(key, value)` only.
+
 ### `api.settings`
 
 `schema()` from `modinfo.json` `configSchema`, `get()`, `set(obj)`, `patch(partial)`. Files: `%AppData%\Roaming\sandustry\mods\config\<id>.json` (same as `api.modConfig`).
 
 ### `api.mods`
 
-`list()`, `get(id)`, `enabled()`, `disable(ids)`, `getDisabled()`, `assetUrl(modId, rel)` → `sandforge://…`, `fileUrl(modId, rel)` (same as `assetUrl` in the game page — never `file://`), `read(modId, rel)`, `reload(id?)`, `unload(id?)`, `missingDeps()`.
+`list()`, `get(id)`, `enabled()`, `disable(ids)`, `getDisabled()`,
+`assetUrl(modId, rel)` → `sandforge://…`, `fileUrl(modId, rel)`,
+`read(modId, rel)`, `reload(id?)`, `unload(id?)`, `missingDeps()`.
+
+In Electron, `mods.fileUrl` returns a disk `file://` URL while
+`mods.assetUrl` returns `sandforge://`. In the game, both names return a
+`sandforge://` URL.
 
 `disable` writes `loader-config.json`, unloads that mod’s electron resources, rebuilds renderer patches, and reloads game windows. Sandkit’s in-page mod list is filtered immediately. `setDisabled` is an alias.
 
@@ -94,11 +140,19 @@ Queue patches **before** the patcher seals (after all electron plugins). After s
 
 `unseal()` / `isSealed()` / `applyPreload()` — late Anvil. Renderer files need `windows.reload()` after you queue more patches. Main-process files (`main.js`, `workshop-mods.js`) still need a relaunch.
 
-Canonical: `add({ id, file, find, replace, expect })`. `expect` default `1`. Also `replace` / `prefix` / `postfix` / `wrap` / `remove` / `transform` / `file(path).find(…).replace(…).expect(1).apply()`, plus `unpatch`, `read`, `preview`, `dump`, `list`, `status`, `unseal`, `isSealed`, `applyPreload`. Older `setPatch` / `from`+`to` / `expectedMatches` still work.
+Canonical: `add({ id, file, find, replace, expect })`. `expect` default `1`.
+Also `set`, `replace`, `prefix`, `postfix`, `bodyPrefix`, `wrap`, `remove`,
+`transform`, `transpiler`, and
+`file(path).find(…).replace(…).expect(1).apply()`, plus `unpatch`, `read`,
+`preview`, `dump`, `list`, `status`, `unseal`, `isSealed`, `applyPreload`.
+Compatibility helpers include `addPatch`, `setPatch`, `removePatch`,
+`patchExists`, `addMappedPatch`, and `setMappedPatch`.
 
 `status()` includes `sealed`.
 
-Fluent extras: `.regex(pattern, flags)`, `.occurrence(n|"all")`, `.phase("early"|"late")`, `.priority(n)`, `.id(tag)`, `.wrap(before, after)`, `.remove()`.
+Fluent extras: `.regex(pattern, flags)`, `.occurrence(n|"all")`,
+`.phase("early"|"late")`, `.priority(n)`, `.id(tag)`, `.atomic(value)`,
+`.wrap(before, after)`, `.remove()`.
 
 JSON: `anvil.json` or `sandforge-patches.json` in the mod folder. See [MODDING.md](MODDING.md#anvil-apipatcher).
 
@@ -116,7 +170,14 @@ JSON: `anvil.json` or `sandforge-patches.json` in the mod folder. See [MODDING.m
 
 `list`, `get(id)`, `current`, `create`, `close`, `show`, `hide`, `focus`, `reload`, `minimize`, `maximize`, `unmaximize`, `setTitle`, `setSize`, `setBounds`, `getBounds`, `setFullScreen`, `isFullScreen`, `setZoom`, `getZoom`, `setAlwaysOnTop`, `openDevTools`, `executeJavaScript`, `insertCSS`, `send`, `broadcast`, `capturePage` (PNG buffer), `captureRegion(rect, id?)`, `captureToClipboard`, `printToPDF(opts, id?)`.
 
-`create({ file, width, height, title, alwaysOnTop, display, parent, backgroundColor, maximizable, fullscreenable, resizable, injectGame })` loads **`.html` from this mod’s folder only**. `display` is a display id or index; the window is centered on that monitor. `parent` defaults to the game window (`false` = none). The window gets the loader preload + game API. `injectGame: true` also runs this mod’s `entry.game.js` there.
+`create({ file, html, path, width, height, title, alwaysOnTop, display, parent,
+backgroundColor, maximizable, minimizable, fullscreenable, resizable,
+autoHideMenuBar, injectGame })` loads HTML from this mod’s folder only.
+`file` is the normal relative-path option; `path` is an alias, while `html`
+supplies markup directly. `display` is a display id or index; the window is
+centered on that monitor. `parent` defaults to the game window (`false` =
+none). The window gets the loader preload + game API. `injectGame: true` also
+runs this mod’s `entry.game.js` there.
 
 Most methods take an optional window `id`. Omitted = first live window. `send` / `broadcast` fire `sandforge-event` in the renderer (`api.on` in the game).
 
@@ -136,7 +197,10 @@ Most methods take an optional window `id`. Omitted = first live window. `send` /
 
 `fetch` / `get` / `getJson` / `post` / `request` (http/https, 8 MB default, 20 s timeout), `download(url, destRel)` (32 MB, allowed folders), `ws(url)` (ws/wss only).
 
-`ws` returns `{ on, off, send, close }`. In the game it is async and messages arrive as `sf:ws:message`.
+In Electron, `ws` returns `{ on, off, send, close }`. In the game,
+`await api.net.ws()` returns `{ on, send, close }`; it has no `off` method.
+Socket activity also arrives through `sf:ws:open`, `sf:ws:message`,
+`sf:ws:close`, and `sf:ws:error`.
 
 `get` / `fetch` resolve `{ status, headers, body }`.
 
@@ -204,7 +268,9 @@ Electron `globalShortcut`: `register(accelerator, fn)`, `unregister`, `unregiste
 
 ### `api.assets`
 
-`url(rel)` → `sandforge://<modId>/…`, `fileUrl(rel)` (alias of `url` in the game page), `read`, `readBinary`.
+In Electron, `url(rel)` → `sandforge://<modId>/…` while `fileUrl(rel)` returns
+a disk `file://` URL. `read` and `readBinary` read from the current mod. In the
+game page, `fileUrl` is an alias of `url`.
 
 ### `api.util`
 
@@ -217,13 +283,17 @@ Electron `globalShortcut`: `register(accelerator, fn)`, `unregister`, `unregiste
 | Event | When |
 | --- | --- |
 | `sf:mod-loaded` | Each electron plugin finished |
+| `sf:mod-unloaded` | An electron plugin was unloaded |
 | `sf:all-mods-loaded` | After every electron plugin |
-| `sf:window-created` | Browser window created |
-| `sf:game-started` | Same moment as window created |
+| `sf:game-started` | The game window was created |
 | `sf:game-closed` | App quit |
 | `sf:mod-config-changed` | `modConfig.set` / settings IPC |
 
-`sf:scene-loaded` is **game-local** (see below), not this bus.
+These are Electron-local events. Renderer events use `api.on`: the loader
+sends `sf:window-created`, `sf:mod-unloaded`, and `sf:mods-disabled`, and
+`api.bus.emit` broadcasts custom channels. `sf:scene-loaded` is game-local
+(see below). Notifications emit `sf:notify-click` / `sf:notify-action` on the
+bus; game WebSockets emit the four `sf:ws:*` channels listed above.
 
 ### Events / game IPC
 
@@ -241,11 +311,20 @@ Aliases of `api.paths` / `api.mods`: `getModsPath`, `getGameBasePath`, `getGameA
 
 ## Game (`entry.game.js`)
 
-Injected after `runtime/game-api.js`. Globals: `window.sandforge`, `window.sandforgeAPI`, `window.SandforgeGame`.
+Injected after `runtime/game-api.js`. Globals: `window.sandforge`,
+`window.sandforgeAPI`, `window.SandforgeGame`, and the compatibility alias
+`window.sandforgeGame`. Loader detection is available through
+`window.SandforgeLoader.has()`, `openGithub()`, `window.__SF_HOST__`, and
+`window.__SANDFORGE_LOADER__`.
 
 Each game entry is injected with `api.bind(id)` so `api.modId` / `store` / `settings` / `assets` stay on that mod. Capture `const api = window.sandforge` in the entry. `api.environment === "game"`, `api.isLoader`. `window.__SF_CURRENT_MOD__` is only set while the entry runs; do not read it later.
 
 Loader IPC methods return **Promises**. Electron-only surfaces stay off the page: `shortcuts`, `images`, `watch`, `timers`, `tray`, `help`. Everything else below is on the game object.
+
+The merged preload bridge also retains legacy methods: `getModsPath`,
+`getPaths`, `writeFile`, `invokeElectronIPC`, `handleElectronEvent`,
+`gameEntrypoints`, and `modConfig.get/set`. New code should use `api.paths`,
+`api.fs`, `api.invoke` / `api.on`, and `api.settings`.
 
 ### Sandkit
 
@@ -261,7 +340,7 @@ Loader IPC methods return **Promises**. Electron-only surfaces stay off the page
 
 `api.scene.get()`, `onChange(fn)`, `isMenu()`.
 
-`api.i18n.add(key, value)`, `t(key, fallback)`.
+`api.i18n.add(key, value, locale?)`, `t(key, fallback)`.
 
 ### UI
 
@@ -271,13 +350,27 @@ Loader IPC methods return **Promises**. Electron-only surfaces stay off the page
 
 `api.tick.every(ms, fn)`, `next(fn)`, `onFrame(fn)`.
 
-`api.commands.register(name, fn, help)`, `run`, `list`. **Ctrl+`** opens a prompt.
+`api.commands.register(name, fn, help)`, `run`, `list`. **Ctrl + backtick**
+opens a prompt.
 
 Built-in: `mods`, `scene`, `toast`, `help`, `relaunch`, `reload [id]`.
 
 ### Loader IPC
 
-`api.fs.*` (including `readBinary`; no `resolve`), `store` (get/set/remove/clear), `settings` (get/set/patch/schema/`panel()`), `mods` (`list`, `assetUrl`, `fileUrl`, `read`, `getDisabled`, `setDisabled`, `reload`, `unload`), `paths.get()`, `net` (fetch/get/post/getJson/download/request/ws), `dialog` (open/save/message/error), `clipboard`, `shell`, `windows` (list, create, close, show, hide, focus, reload, openDevTools, executeJavaScript, insertCSS, setTitle, setSize, fullscreen, zoom, getZoom, bounds, minimize, maximize, unmaximize, setAlwaysOnTop, capturePage, captureRegion, captureToClipboard, printToPDF, broadcast), `notify`, `screen.displays` / `primary`, `saves`, `crypto`, `registry`, `bus`, `steam` (info/subscribe/unsubscribe/download/query/getItem/…), `logFile.write`, `patcher` (status/unseal/isSealed/add/applyPreload), `app.info` / `relaunch` / `quit`, `relaunch()`, `log`.
+`api.fs.*` (including `readBinary`; no `resolve`), `store`
+(`get(key)`, `set(key, value)`, `remove`, `clear`), `settings`
+(`get`/`set`/`patch`/`schema`/`panel()`), `mods` (`list`, `assetUrl`,
+`fileUrl`, `read`, `getDisabled`, `disable`/`setDisabled`, `reload`,
+`unload`), `paths.get()`, `net`
+(`fetch`/`get`/`post`/`getJson`/`download`/`request`/`ws`), `dialog`,
+`clipboard`, `shell`, and `windows` (`list`, `create`, `close`, `show`,
+`hide`, `focus`, `reload`, `openDevTools`, `executeJavaScript`, `insertCSS`,
+`setTitle`, `setSize`, `setFullScreen`, `isFullScreen`, `setZoom`, `getZoom`,
+`getBounds`, `setBounds`, `minimize`, `maximize`, `unmaximize`,
+`setAlwaysOnTop`, captures, PDF, and `broadcast`). It also exposes `notify`,
+`screen`, `saves`, `crypto`, partial `registry` (`get`/`set`/`list`), partial
+`bus` (`on`/`emit`), `steam`, `logFile.write`, the patcher subset, `app`,
+`relaunch()`, and `log`.
 
 `windows.create` uses the bound `api.modId` if you omit `modId`. HTML still has to live in that mod folder. Created windows get the loader preload and `game-api.js` (so `invoke` / `store` / `fs` work). They do **not** run other mods’ `entry.game.js` unless you pass `injectGame: true`.
 
@@ -285,9 +378,15 @@ Built-in: `mods`, `scene`, `toast`, `help`, `relaunch`, `reload [id]`.
 
 `api.invoke(channel, …args)` → Electron `handleGameIPC`.
 
-`api.send(channel, data)` → broadcast to all windows.
+`api.send(channel, data)` and `api.emit(channel, data)` are aliases that
+broadcast to all windows.
 
-`api.on(channel, fn)` / `api.events.on` — Electron `sendGameEvent` / `bus.emit`, plus local `api.events.emit`.
+`api.on(channel, fn)` receives channels sent from Electron by
+`sendGameEvent`, `windows.broadcast`, or `bus.emit`.
+
+`api.events.on(channel, fn)` is the game-local event bus and receives events
+raised with `api.events.emit`, including `sf:scene-loaded`. It does not receive
+Electron events.
 
 `api.rpc(ns, method, args)` — raw dispatch (`"fs"`, `"readText"`, `[rel]`). `api.api` is an alias.
 
@@ -295,7 +394,8 @@ Scene changes also emit local `sf:scene-loaded`.
 
 ### Assets / audio / workers
 
-`api.assets.url(rel, modId?)` → `sandforge://…` (use in `<img>`, `fetch`, CSS).
+`api.assets.url(rel, modId?)` and its `fileUrl` alias → `sandforge://…` (use
+in `<img>`, `fetch`, CSS).
 
 `api.assets.image`, `api.assets.audio`.
 
@@ -325,11 +425,22 @@ Aliases: `workers`, `all`, `sim`, `managerWorker`, `simulationWorker`. Omit keys
 
 `self.sandforge` / `self.sandforgeAPI` / `self.SandforgeWorker`:
 
-`version`, `environment: "worker"`, `isLoader`, `sandkit`, `api` (sandkit.api or `api.api(ns, method, args)` RPC), `invoke`, `fs`, `on` / `off` / `once` / `listenGameMessage`, `sendGameMessage(channel, payload)`, `emit`, `log`, `now`, `util.clamp` / `lerp`.
+`version`, `environment: "worker"`, `isLoader`, `sandkit`, `api` (the
+Sandkit worker API), `invoke`, `rpc` / `dispatch`, `fs`, `on` / `off` /
+`once` / `listenGameMessage`, `sendGameMessage(channel, payload)`, `emit`,
+`log`, `now`, `util.clamp` / `lerp`.
 
-Messages use `{ __sf: 1, channel, payload }`. Game listens with `api.workers.on`.
+Messages use `{ __sf: 1, channel, payload }` and are bridged through the loader
+bus. Game listens with `api.workers.on`; worker `sendGameMessage` / `emit`
+return a Promise for bridge completion.
 
-Workers can `api.invoke(channel, …args)` and `api.rpc(ns, method, args)` (and `api.fs.*`) through `sandforge://loader/rpc`. `api.api` is Sandkit’s worker API, not loader RPC. `dispatch` is an alias of `rpc`. String Anvil via `api.rpc("patcher", "add", [patch])` after `unseal`. Function transforms still need the electron entry.
+Worker `api.fs` contains only `exists`, `readText`, `readJson`, `write`, and
+`list`. Other loader routes require `api.rpc(ns, method, args)` through
+`sandforge://loader/rpc`. `api.invoke(channel, …args)` calls a mod IPC handler;
+`api.api` is Sandkit’s worker API, not loader RPC. `dispatch` is an alias of
+`rpc`. String Anvil patches can use
+`api.rpc("patcher", "add", [patch])` after `unseal`; function transforms still
+need an Electron entrypoint.
 
 `mods.reload` / `setDisabled` bump a worker generation. Running workers re-eval their plugin sources within a few seconds. `api.workers.reload()` from the game does the same.
 
@@ -347,7 +458,7 @@ The game window is `sandforge-ui://game/…`. Chromium blocks `file://` from tha
 | `sandforge://data/…` | `%AppData%\Roaming\sandustry\…` |
 | `sandforge://loader/…` | loader folder |
 
-No `..`. Host can be the mod id, folder name, or Workshop item id. `fetch` and `<img src>` work.
+No `..`. Host can be the mod id, folder name, or Workshop item id. `fetch` and `<img src>` work. Dedicated `Worker` scripts should be loaded with `fetch(api.assets.url(rel))` or `api.mods.read` and a blob URL — Chromium often blocks `new Worker("file.js")` on custom schemes even when the HTML itself is `sandforge://`.
 
 **Page (renderer):** `api.assets.url(rel)`, `api.mods.assetUrl(id, rel)`, or `api.mods.fileUrl` (same thing — `sandforge://`, never disk). Or `api.mods.read(id, rel)` for text.
 
@@ -380,9 +491,16 @@ A dom-ready guard rewrites leftover `file://` on images, scripts, CSS, and audio
 }
 ```
 
-Also accepted: `modId`, `dependencies`, `sandforge.electronEntrypoint`. Default filenames if fields are omitted: `entry.electron.js` / `sandforge-main.js`, `entry.game.js`, `entry.worker.js`.
+Also accepted: `modId`, `dependencies`, `hardDepends`, `workers`, and
+`sandforge.electronEntrypoint`. Default filenames if fields are omitted:
+`entry.electron.js` / `sandforge-main.js`, `entry.game.js`,
+`entry.worker.js`.
 
-Missing `depends` log a warning; they do not hard-fail. Local mods override Workshop on the same id. Folders named `node_modules`, `wrapper`, `runtime`, `loader`, or starting with `.` are not scanned.
+Missing `depends` log a warning. `dependsRequired: true` skips the Electron
+entrypoint when a dependency is missing, but game and worker entrypoints must
+guard required dependencies themselves. Local mods override Workshop on the
+same id. Folders named `node_modules`, `wrapper`, `runtime`, `loader`, `.git`,
+or starting with `.` are not scanned.
 
 ---
 
@@ -390,4 +508,5 @@ Missing `depends` log a warning; they do not hard-fail. Local mods override Work
 
 No arbitrary disk through `api.fs` / `api.shell` (Electron `require` is a different story). No `file://` shell to system folders. No cookies/credentials. Network is http/https/ws/wss only. No Workshop upload of the loader itself.
 
-TypeScript types: `types/sandforge.d.ts` (`package.json` `"types"`).
+TypeScript types:
+[`types/sandforge.d.ts`](../types/sandforge.d.ts) (`package.json` `"types"`).

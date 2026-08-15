@@ -45,9 +45,5 @@
       });
   }
 
-  var apiOut = { play: play, close: function () {}, isOpen: function () { return false; } };
-  root.SandforgeArcade = apiOut;
-  root.SandforgeSolitaire = apiOut;
-  root.SandforgeSandDug = apiOut;
-  root.SandforgeGrainRush = apiOut;
+  root.SandforgeArcade = { play: play };
 })(typeof window !== "undefined" ? window : this);

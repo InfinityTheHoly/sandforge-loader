@@ -15,8 +15,8 @@ module.exports = function (api) {
     }
     const created = api.windows.create({
       file: "ui/arcade.html",
-      width: 740,
-      height: 640,
+      width: 760,
+      height: 720,
       title: "Arcade — SandForge",
       backgroundColor: "#0a0c10",
       alwaysOnTop: true,
@@ -29,9 +29,6 @@ module.exports = function (api) {
 
   const handle = api.handle || api.handleGameIPC;
   handle("sandforge.example:arcade-popout", openArcade);
-  handle("sandforge.example:solitaire-popout", openArcade);
-  handle("sandforge.example:dug-popout", openArcade);
-  handle("sandforge.example:grain-popout", openArcade);
 
   const boots = (api.store.get("boots", 0) || 0) + 1;
   api.store.set("boots", boots);
@@ -59,6 +56,7 @@ module.exports = function (api) {
       mods: mods.length,
       enabled: enabled.length,
       electron: true,
+      worker: api.registry.get("sandforge.example", "workerReady", false) === true,
       patcher: patcher,
       app: {
         version: api.app && api.app.version,

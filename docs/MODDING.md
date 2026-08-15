@@ -2,7 +2,52 @@
 
 Workshop items and local mods use the same layout. Official Sandkit fields still work. Extra fields unlock full control **only when this loader is installed**.
 
-Full method list: [API.md](API.md). Example: `examples/sandforge-example`.
+Full method list: [API.md](API.md). Complete example:
+[`examples/sandforge-example`](../examples/sandforge-example/README.md).
+
+## Quick start
+
+Create a folder under
+`%AppData%\Roaming\sandustry\mods\author.my-mod\` with these two files:
+
+```text
+author.my-mod/
+├── modinfo.json
+└── entry.game.js
+```
+
+`modinfo.json`:
+
+```json
+{
+  "manifestVersion": 1,
+  "id": "author.my-mod",
+  "name": "My Mod",
+  "version": "1.0.0",
+  "author": "you",
+  "gameEntrypoint": "entry.game.js"
+}
+```
+
+`entry.game.js`:
+
+```js
+const api = window.sandforge;
+
+api.ui.toast("My Mod loaded");
+api.commands.register(
+  "hello",
+  () => api.ui.toast("Hello from My Mod"),
+  "show a test message",
+);
+```
+
+Launch the game through Steam. Press **Ctrl + backtick** and run `hello` to
+verify that the mod loaded. After editing a mod, press **F6** to restart
+Sandustry.
+
+Use `entry.game.js` for most UI and gameplay mods. Add an Electron or worker
+entrypoint only when the mod actually needs that runtime.
 
 ## Manifest
 
@@ -43,9 +88,28 @@ If you omit an entrypoint field, the loader still picks these filenames when the
 | `workerEntrypoint` | `entry.worker.js` (both workers) |
 | `workerEntrypoints` | `{ both, manager, simulation }` — omit keys you do not use |
 
-`depends` (or `dependencies`) loads those ids first (with `loadOrder`). Missing deps warn. Set `dependsRequired: true` to skip the mod instead. Lower `loadOrder` runs first.
+`depends` (or `dependencies`) loads those ids first (with `loadOrder`). Missing
+dependencies produce a warning. `dependsRequired: true` skips the Electron
+entrypoint when one is missing; game and worker code must still guard any
+dependency they require. Anvil JSON is also still loaded. Lower `loadOrder`
+runs first.
 
-Without the loader, Steam still loads `entry` / `patches.json` / maps as usual. Electron / game / worker entrypoints and Anvil JSON are ignored.
+Dependency ordering is applied to Electron, game, and worker entrypoints.
+Anvil JSON uses `loadOrder` and then mod id; it does not topologically sort
+`depends`. Give dependent JSON patches a higher `loadOrder` when their order
+matters.
+
+`entry` is the standard Sandkit entrypoint and is what provides fallback
+behavior without SandForge. Without the loader, Steam still loads `entry`,
+`patches.json`, maps, and assets as usual; Electron/game/worker entrypoints and
+Anvil JSON are ignored.
+
+`workers` is an alias for `workerEntrypoints`, and `hardDepends` is an alias
+for `dependsRequired`.
+
+`configSchema` supports `string`, `number`, and `boolean` fields with optional
+`default` values. In the game, `api.settings.panel()` builds a basic settings
+form from this schema.
 
 ## When your code runs
 
@@ -57,6 +121,10 @@ Detect the loader with `window.SandforgeLoader.has()` or `window.__SF_HOST__`. I
 
 Capture `const api = window.sandforge` in `entry.game.js`. Each entry is bound to its own id so `store` / `settings` / `assets` cannot leak to another mod.
 
+Electron entrypoints have full Node.js access and are not a security sandbox.
+The convenience APIs restrict file and network access, but a plugin can still
+use `require()`. Do not run untrusted Electron mods.
+
 ## Workshop ecosystem
 
 The loader is **not** a Workshop item. Workshop mods must keep working in official Sandkit.
@@ -65,7 +133,7 @@ The loader is **not** a Workshop item. Workshop mods must keep working in offici
 - Required features (enable/disable, maps larger than 3840, Electron windows): prompt and link to GitHub. Do not hard-crash.
 - Optional upgrades: prompt once, then continue. SandForge Toolkit does this for menus and the editor.
 - Map-only packs (`map` in `modinfo.json`, no `entry`) belong in **Maps**, not **Mods**. Code mods stay in Mods. Hybrids can appear in both.
-- Shared GitHub URL: `https://github.com/sandforge/sandforge-loader`
+- [Download the loader](https://github.com/InfinityTheHoly/sandforge-loader)
 
 Companion Workshop items: **SandForge** (`sandforge.example`) for status/docs, **SandForge Toolkit** (`sandustry.sandforge-tk`) for menus and the editor.
 
@@ -116,7 +184,7 @@ The loader also rewrites leftover `file://` on images, scripts, CSS, and audio a
 
 Another mod’s files: `sandforge://<theirId-or-folder>/map/terrain.png` (or `api.assets.url("map/terrain.png", otherId)`).
 
-Popout windows created with `api.windows.create({ file: "ui/x.html" })` load as `sandforge://<mod>/ui/x.html`. Relative assets in that HTML resolve under the mod folder.
+Popout windows created with `api.windows.create({ file: "ui/x.html" })` load as `sandforge://<mod>/ui/x.html`. Relative assets in that HTML resolve under the mod folder. For a dedicated `Worker` in a popout, do not use `new Worker("x.js")` — `fetch` the `sandforge://` URL (or `api.mods.read`) and start the worker from a blob URL. The game’s `entry.worker.js` is a different world: it is appended to Sandustry’s manager/simulation workers and talks with `{ __sf: 1 }` / `api.workers.on`, which the popout never sees.
 
 Full URL table: [API.md — sandforge:// assets](API.md#sandforge-assets).
 
@@ -176,6 +244,12 @@ Named form: `{ "type": "replace", "from": "a", "to": "b $", "token": "$", "expec
 
 `expectedMatches` default `1`. `0` / `-1` / `"any"` = all matches. `phase` is `early` or `late` (default `late`). Higher `priority` runs first.
 
+If the actual match count does not satisfy `expect`, that patch is skipped and
+the mismatch is written to the Electron console. The rest of the mod continues
+loading. Use `api.patcher.status()` to inspect results and
+`api.patcher.dump(file)` to write the patched source under
+`%AppData%\Roaming\sandustry\meta\sandforge-patch-dump\`.
+
 Official Sandkit `patches.json` is unchanged and still `js/*.js` only.
 
 ## Game (`entry.game.js`)
@@ -190,7 +264,8 @@ api.commands.register("ping", () => api.ui.toast("pong"), "toast pong");
 // api.modId / api.store / api.settings stay on this mod
 ```
 
-Sandkit namespaces are on `api.game.*`. **Ctrl+`** opens the command prompt.
+Sandkit namespaces are on `api.game.*`. **Ctrl + backtick** opens the command
+prompt.
 
 `api.bind(id)` is how the loader attaches that id. Do not read `window.__SF_CURRENT_MOD__` after the entry returns.
 
@@ -206,13 +281,25 @@ api.on("author.my-mod:ask", (data) => {
 });
 ```
 
-In the game: `api.workers.on((channel, payload) => { … })`. Workers can `api.invoke` / `api.dispatch` / `api.fs` through the loader RPC. `mods.reload` re-evals worker plugins in place.
+In the game: `api.workers.on((channel, payload) => { … })`. Workers can use
+`api.invoke` / `api.dispatch` through loader RPC. Their `api.fs` facade
+contains `exists`, `readText`, `readJson`, `write`, and `list`; use raw
+`api.rpc` for other exposed routes. `mods.reload` re-evals worker plugins in
+place.
 
 ## Events
 
-Electron (`api.events` / `api.bus`): `sf:mod-loaded`, `sf:all-mods-loaded`, `sf:game-started`, `sf:game-closed`, `sf:mod-config-changed`, `sf:window-created`.
+Electron lifecycle events use `api.events` (or top-level `api.on`):
+`sf:mod-loaded`, `sf:mod-unloaded`, `sf:all-mods-loaded`,
+`sf:game-started`, `sf:game-closed`, and `sf:mod-config-changed`.
 
-Game: `sf:scene-loaded` (local, when Sandkit’s active scene changes). `api.on` also receives Electron `sendGameEvent` / `bus.emit`.
+In the game, `api.on` receives channels sent from Electron, including
+`sf:window-created`, `sf:mod-unloaded`, `sf:mods-disabled`, and custom
+`api.bus.emit` channels. `api.events.on` is local to the page;
+`sf:scene-loaded` fires there when Sandkit’s active scene changes.
+
+`api.bus` is a separate inter-mod pub/sub channel. It is not the Electron
+lifecycle event bus.
 
 ## Settings and disable
 
@@ -222,4 +309,13 @@ Game: `sf:scene-loaded` (local, when Sandkit’s active scene changes). `api.on`
 | Per-mod store | `%AppData%\Roaming\sandustry\mod-store\<id>.json` |
 | Disable a mod | `loader-config.json` → `"disabled": ["author.my-mod"]` |
 
-F6 relaunches after changes.
+## Reloading during development
+
+| Change | Reload action |
+| --- | --- |
+| Electron or game entrypoint | `api.mods.reload(id)` or the built-in `reload <id>` command |
+| Worker entrypoint | `api.mods.reload(id)`; workers refresh on their next poll |
+| Late renderer patch | `api.patcher.unseal()`, add it, then `api.windows.reload()` |
+| `anvil.json`, startup patch, loader code, or main-process source | **F6** for a full relaunch |
+
+Press **F12** to toggle the game window's DevTools.

@@ -97,14 +97,27 @@
     once: once,
     listenGameMessage: on,
     sendGameMessage: function (channel, payload) {
+      var message = {
+        __sf: 1,
+        channel: String(channel || ""),
+        payload: payload,
+      };
       try {
-        self.postMessage({ __sf: 1, channel: String(channel || ""), payload: payload });
+        self.postMessage(message);
       } catch (e) {
         console.error("[sandforge-worker] send failed", e);
       }
+      return rpc({
+        ns: "bus",
+        method: "emit",
+        args: ["sf:worker-message", message],
+      }).catch(function (e) {
+        console.error("[sandforge-worker] bridge failed", e);
+        return { ok: false };
+      });
     },
     emit: function (channel, payload) {
-      api.sendGameMessage(channel, payload);
+      return api.sendGameMessage(channel, payload);
     },
     log: function (level, message) {
       console.log("[sandforge-worker][" + (level || "info") + "] " + message);
