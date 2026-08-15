@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Solitaire — SandForge</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0e1a14;
+        color: #d7e6d4;
+        font: 12px/1.35 "Segoe UI", "Noto Sans", system-ui, sans-serif;
+        overflow: hidden;
+        user-select: none;
+      }
+      .wrap {
+        box-sizing: border-box;
+        height: 100%;
+        padding: 10px 12px 8px;
+        display: flex;
+        flex-direction: column;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 6px;
+      }
+      .banner {
+        margin: 0;
+        color: #ffe700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-weight: 700;
+        font-size: 11px;
+      }
+      .sub {
+        margin: 0;
+        color: #8aa392;
+        font-size: 11px;
+      }
+      .bar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      button {
+        background: #14301f;
+        color: #ffe700;
+        border: 1px solid #3d6b48;
+        border-radius: 2px 8px 2px 8px;
+        padding: 5px 10px;
+        font: 700 11px/1 "Segoe UI", sans-serif;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: #ffe700;
+      }
+      .hud {
+        margin-left: auto;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 11px;
+        color: #b7cbb4;
+      }
+      .hud b {
+        color: #ffe700;
+      }
+      canvas {
+        display: block;
+        background: #123322;
+        border: 1px solid #2f5a3c;
+        border-radius: 2px 10px 2px 10px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <p class="banner">Klondike</p>
+        <p class="sub">Click stock to deal. Click a card, then a pile. Double-click to foundation. Esc closes.</p>
+      </div>
+      <div class="bar">
+        <button type="button" id="back">Arcade</button>
+        <button type="button" id="new">New deal</button>
+        <button type="button" id="undo">Undo</button>
+        <div class="hud">
+          <span>Time <b id="time">0:00</b></span>
+          <span>Moves <b id="moves">0</b></span>
+          <span>Wins <b id="wins">0</b></span>
+          <span>Best <b id="best">—</b></span>
+        </div>
+      </div>
+      <canvas id="c" width="620" height="460"></canvas>
+    </div>
+    <script>
+      (function () {
+        var SUITS = ["S", "H", "D", "C"];
+        var MARKS = { S: "♠", H: "♥", D: "♦", C: "♣" };
+        var RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+        var CW = 62;
+        var CH = 86;
+        var GAP = 12;
+        var LEFT = 16;
+        var TOP = 14;
+        var FACE = 20;
+        var canvas = document.getElementById("c");
+        var ctx = canvas.getContext("2d");
+        var stock = [];
+        var waste = [];
+        var foundations = [[], [], [], []];
+        var tableau = [[], [], [], [], [], [], []];
+        var selected = null;
+        var moves = 0;
+        var started = 0;
+        var won = false;
+        var history = [];
+        var wins = 0;
+        var bestTime = 0;
+        var seed = 1;
+        var tick = 0;
+
+        function sf() {
+          return window.sandforge || window.sandforgeAPI || null;
+        }
+        function invoke(channel) {
+          var b = sf();
+          if (!b || typeof b.invoke !== "function") return Promise.reject(new Error("no loader"));
+          return b.invoke.apply(b, arguments);
+        }
+        function red(suit) {
+          return suit === "H" || suit === "D";
+        }
+        function rankOf(card) {
+          return RANKS.indexOf(card.rank);
+        }
+        function fmt(sec) {
+          sec = Math.max(0, sec | 0);
+          var m = (sec / 60) | 0;
+          var s = sec % 60;
+          return m + ":" + (s < 10 ? "0" : "") + s;
+        }
+        function hud() {
+          var elapsed = started ? Math.floor((Date.now() - started) / 1000) : 0;
+          document.getElementById("time").textContent = fmt(elapsed);
+          document.getElementById("moves").textContent = String(moves);
+          document.getElementById("wins").textContent = String(wins);
+          document.getElementById("best").textContent = bestTime ? fmt(bestTime) : "—";
+        }
+        function mulberry(a) {
+          return function () {
+            a |= 0;
+            a = (a + 0x6d2b79f5) | 0;
+            var t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+          };
+        }
+        function snapshot() {
+          function copy(list) {
+            return list.map(function (c) {
+              return { suit: c.suit, rank: c.rank, up: c.up };
+            });
+          }
+          return {
+            stock: copy(stock),
+            waste: copy(waste),
+            foundations: foundations.map(copy),
+            tableau: tableau.map(copy),
+            moves: moves,
+          };
+        }
+        function restore(s) {
+          stock = s.stock;
+          waste = s.waste;
+          foundations = s.foundations;
+          tableau = s.tableau;
+          moves = s.moves;
+          selected = null;
+        }
+        function pushHist() {
+          history.push(snapshot());
+          if (history.length > 80) history.shift();
+        }
+
+        function freshDeck(rng) {
+          var d = [];
+          for (var s = 0; s < 4; s++) {
+            for (var r = 0; r < 13; r++) d.push({ suit: SUITS[s], rank: RANKS[r], up: false });
+          }
+          for (var i = d.length - 1; i > 0; i--) {
+            var j = (rng() * (i + 1)) | 0;
+            var t = d[i];
+            d[i] = d[j];
+            d[j] = t;
+          }
+          return d;
+        }
+
+        function deal() {
+          seed = (Date.now() ^ ((Math.random() * 1e9) | 0)) >>> 0;
+          var rng = mulberry(seed || 1);
+          var deck = freshDeck(rng);
+          stock = [];
+          waste = [];
+          foundations = [[], [], [], []];
+          tableau = [[], [], [], [], [], [], []];
+          selected = null;
+          moves = 0;
+          won = false;
+          history = [];
+          started = 0;
+          for (var col = 0; col < 7; col++) {
+            for (var n = 0; n <= col; n++) {
+              var card = deck.pop();
+              card.up = n === col;
+              tableau[col].push(card);
+            }
+          }
+          stock = deck;
+          document.querySelector(".sub").textContent =
+            "Deal #" + seed + " — click stock, then cards. Double-click to foundation.";
+          hud();
+          draw();
+        }
+
+        function ensureClock() {
+          if (!started) started = Date.now();
+        }
+
+        function canOnFoundation(card, pile) {
+          if (!pile.length) return card.rank === "A";
+          var top = pile[pile.length - 1];
+          return top.suit === card.suit && rankOf(card) === rankOf(top) + 1;
+        }
+        function canOnTableau(card, pile) {
+          if (!pile.length) return card.rank === "K";
+          var top = pile[pile.length - 1];
+          if (!top.up) return false;
+          return red(card.suit) !== red(top.suit) && rankOf(card) === rankOf(top) - 1;
+        }
+
+        function tryFoundation(card) {
+          for (var i = 0; i < 4; i++) {
+            if (canOnFoundation(card, foundations[i])) return i;
+          }
+          return -1;
+        }
+
+        function checkWin() {
+          if (foundations.every(function (p) { return p.length === 13; })) {
+            won = true;
+            var elapsed = Math.floor((Date.now() - started) / 1000) || 1;
+            invoke("sandforge.example:solitaire-win", elapsed, moves).then(function (res) {
+              if (res && res.wins != null) wins = res.wins;
+              if (res && res.bestTime) bestTime = res.bestTime;
+              hud();
+            }).catch(function () {});
+          }
+        }
+
+        function flipTop(col) {
+          var pile = tableau[col];
+          if (pile.length && !pile[pile.length - 1].up) pile[pile.length - 1].up = true;
+        }
+
+        function takeFrom(sel) {
+          if (sel.kind === "waste") return waste.length ? [waste.pop()] : [];
+          if (sel.kind === "foundation") {
+            var f = foundations[sel.i];
+            return f.length ? [f.pop()] : [];
+          }
+          if (sel.kind === "tableau") {
+            return tableau[sel.i].splice(sel.j);
+          }
+          return [];
+        }
+
+        function peek(sel) {
+          if (sel.kind === "waste") return waste[waste.length - 1] || null;
+          if (sel.kind === "foundation") {
+            var f = foundations[sel.i];
+            return f[f.length - 1] || null;
+          }
+          if (sel.kind === "tableau") return tableau[sel.i][sel.j] || null;
+          return null;
+        }
+
+        function moveTo(sel, dest) {
+          var card = peek(sel);
+          if (!card || !card.up) return false;
+          var run =
+            sel.kind === "tableau" ? tableau[sel.i].slice(sel.j) : [card];
+          if (dest.kind === "foundation") {
+            if (run.length !== 1 || !canOnFoundation(card, foundations[dest.i])) return false;
+            pushHist();
+            takeFrom(sel);
+            foundations[dest.i].push(card);
+            if (sel.kind === "tableau") flipTop(sel.i);
+            moves += 1;
+            ensureClock();
+            checkWin();
+            return true;
+          }
+          if (dest.kind === "tableau") {
+            if (!canOnTableau(run[0], tableau[dest.i])) return false;
+            pushHist();
+            var moved = takeFrom(sel);
+            tableau[dest.i] = tableau[dest.i].concat(moved);
+            if (sel.kind === "tableau") flipTop(sel.i);
+            moves += 1;
+            ensureClock();
+            return true;
+          }
+          return false;
+        }
+
+        function drawStock() {
+          pushHist();
+          ensureClock();
+          if (stock.length) {
+            var c = stock.pop();
+            c.up = true;
+            waste.push(c);
+          } else if (waste.length) {
+            while (waste.length) {
+              var w = waste.pop();
+              w.up = false;
+              stock.push(w);
+            }
+          } else {
+            history.pop();
+            return;
+          }
+          moves += 1;
+          selected = null;
+        }
+
+        function autoMove(sel) {
+          var card = peek(sel);
+          if (!card || !card.up) return false;
+          if (sel.kind === "tableau" && sel.j !== tableau[sel.i].length - 1) return false;
+          var fi = tryFoundation(card);
+          if (fi < 0) return false;
+          return moveTo(sel, { kind: "foundation", i: fi });
+        }
+
+        function pileBox(kind, i) {
+          if (kind === "stock") return { x: LEFT, y: TOP, w: CW, h: CH };
+          if (kind === "waste") return { x: LEFT + CW + GAP, y: TOP, w: CW, h: CH };
+          if (kind === "foundation") {
+            return { x: LEFT + (3 + i) * (CW + GAP), y: TOP, w: CW, h: CH };
+          }
+          return { x: LEFT + i * (CW + GAP), y: TOP + CH + 18, w: CW, h: 320 };
+        }
+
+        function hit(mx, my) {
+          function inside(b) {
+            return mx >= b.x && my >= b.y && mx <= b.x + b.w && my <= b.y + b.h;
+          }
+          if (inside(pileBox("stock"))) return { kind: "stock" };
+          if (inside(pileBox("waste")) && waste.length) {
+            return { kind: "waste" };
+          }
+          for (var f = 0; f < 4; f++) {
+            if (inside(pileBox("foundation", f))) return { kind: "foundation", i: f };
+          }
+          for (var t = 0; t < 7; t++) {
+            var pile = tableau[t];
+            var box = pileBox("tableau", t);
+            if (!pile.length) {
+              if (inside({ x: box.x, y: box.y, w: CW, h: CH })) return { kind: "tableau", i: t, j: 0, empty: true };
+              continue;
+            }
+            for (var j = pile.length - 1; j >= 0; j--) {
+              var y = box.y + j * FACE;
+              var h = j === pile.length - 1 ? CH : FACE;
+              if (mx >= box.x && mx <= box.x + CW && my >= y && my <= y + h) {
+                return { kind: "tableau", i: t, j: j };
+              }
+            }
+          }
+          return null;
+        }
+
+        function sameSel(a, b) {
+          if (!a || !b || a.kind !== b.kind) return false;
+          if (a.kind === "waste" || a.kind === "stock") return true;
+          return a.i === b.i && (a.j == null || a.j === b.j);
+        }
+
+        function onClick(mx, my, dbl) {
+          if (won) return;
+          var h = hit(mx, my);
+          if (!h) {
+            selected = null;
+            draw();
+            return;
+          }
+          if (h.kind === "stock") {
+            drawStock();
+            hud();
+            draw();
+            return;
+          }
+          if (dbl) {
+            if (h.empty) return;
+            if (autoMove(h)) {
+              selected = null;
+              hud();
+              draw();
+            }
+            return;
+          }
+          if (selected) {
+            if (sameSel(selected, h)) {
+              selected = null;
+              draw();
+              return;
+            }
+            var dest = h;
+            if (h.kind === "tableau") dest = { kind: "tableau", i: h.i };
+            if (moveTo(selected, dest)) {
+              selected = null;
+              hud();
+              draw();
+              return;
+            }
+          }
+          if (h.empty) {
+            selected = null;
+            draw();
+            return;
+          }
+          var card = peek(h);
+          if (card && card.up) selected = h;
+          else selected = null;
+          draw();
+        }
+
+        function roundRect(x, y, w, h, r) {
+          ctx.beginPath();
+          ctx.moveTo(x + r, y);
+          ctx.arcTo(x + w, y, x + w, y + h, r);
+          ctx.arcTo(x + w, y + h, x, y + h, r);
+          ctx.arcTo(x, y + h, x, y, r);
+          ctx.arcTo(x, y, x + w, y, r);
+          ctx.closePath();
+        }
+
+        function drawCard(card, x, y, hi) {
+          roundRect(x, y, CW, CH, 6);
+          if (!card.up) {
+            ctx.fillStyle = "#1b3d28";
+            ctx.fill();
+            ctx.strokeStyle = hi ? "#ffe700" : "#4a7a55";
+            ctx.stroke();
+            ctx.fillStyle = "#ffe700";
+            ctx.globalAlpha = 0.18;
+            for (var i = 0; i < 4; i++) ctx.fillRect(x + 10, y + 14 + i * 16, CW - 20, 8);
+            ctx.globalAlpha = 1;
+            return;
+          }
+          ctx.fillStyle = "#f4efe2";
+          ctx.fill();
+          ctx.strokeStyle = hi ? "#ffe700" : "#2a2a2a";
+          ctx.lineWidth = hi ? 2 : 1;
+          ctx.stroke();
+          ctx.lineWidth = 1;
+          ctx.fillStyle = red(card.suit) ? "#c0392b" : "#1b1b1b";
+          ctx.font = "700 14px Segoe UI,sans-serif";
+          ctx.textAlign = "left";
+          ctx.fillText(card.rank, x + 6, y + 16);
+          ctx.font = "16px Segoe UI,sans-serif";
+          ctx.fillText(MARKS[card.suit], x + 6, y + 34);
+          ctx.font = "28px Segoe UI,sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(MARKS[card.suit], x + CW / 2, y + 58);
+        }
+
+        function drawSlot(x, y, label) {
+          roundRect(x, y, CW, CH, 6);
+          ctx.strokeStyle = "rgba(255,231,0,0.22)";
+          ctx.stroke();
+          if (label) {
+            ctx.fillStyle = "rgba(255,231,0,0.28)";
+            ctx.font = "22px Segoe UI,sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(label, x + CW / 2, y + 52);
+          }
+        }
+
+        function isSel(kind, i, j) {
+          if (!selected || selected.kind !== kind) return false;
+          if (kind === "waste") return true;
+          if (selected.i !== i) return false;
+          if (j == null) return true;
+          return selected.j === j;
+        }
+
+        function draw() {
+          ctx.fillStyle = "#123322";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          var sb = pileBox("stock");
+          if (stock.length) drawCard({ up: false }, sb.x, sb.y, false);
+          else drawSlot(sb.x, sb.y, "↺");
+          var wb = pileBox("waste");
+          if (waste.length) drawCard(waste[waste.length - 1], wb.x, wb.y, isSel("waste"));
+          else drawSlot(wb.x, wb.y);
+          for (var f = 0; f < 4; f++) {
+            var fb = pileBox("foundation", f);
+            if (foundations[f].length) {
+              drawCard(foundations[f][foundations[f].length - 1], fb.x, fb.y, isSel("foundation", f));
+            } else drawSlot(fb.x, fb.y, MARKS[SUITS[f]]);
+          }
+          for (var t = 0; t < 7; t++) {
+            var tb = pileBox("tableau", t);
+            if (!tableau[t].length) drawSlot(tb.x, tb.y);
+            for (var j = 0; j < tableau[t].length; j++) {
+              var hi = selected && selected.kind === "tableau" && selected.i === t && j >= selected.j;
+              drawCard(tableau[t][j], tb.x, tb.y + j * FACE, hi);
+            }
+          }
+          if (won) {
+            ctx.fillStyle = "rgba(8,16,12,0.72)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#ffe700";
+            ctx.font = "700 28px Segoe UI,sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("CLEARED", canvas.width / 2, canvas.height / 2 - 6);
+            ctx.fillStyle = "#d7e6d4";
+            ctx.font = "13px Segoe UI,sans-serif";
+            ctx.fillText(moves + " moves · " + fmt(Math.floor((Date.now() - started) / 1000)), canvas.width / 2, canvas.height / 2 + 18);
+          }
+        }
+
+        function pos(ev) {
+          var r = canvas.getBoundingClientRect();
+          return {
+            x: ((ev.clientX - r.left) / r.width) * canvas.width,
+            y: ((ev.clientY - r.top) / r.height) * canvas.height,
+          };
+        }
+        canvas.addEventListener("click", function (e) {
+          var p = pos(e);
+          onClick(p.x, p.y, false);
+        });
+        canvas.addEventListener("dblclick", function (e) {
+          e.preventDefault();
+          var p = pos(e);
+          onClick(p.x, p.y, true);
+        });
+        document.getElementById("back").onclick = function () {
+          location.href = "arcade.html";
+        };
+        document.getElementById("new").onclick = deal;
+        document.getElementById("undo").onclick = function () {
+          if (won || !history.length) return;
+          restore(history.pop());
+          hud();
+          draw();
+        };
+        window.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") location.href = "arcade.html";
+          if (e.key === "n" || e.key === "N") deal();
+          if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
+            e.preventDefault();
+            document.getElementById("undo").click();
+          }
+        });
+        setInterval(function () {
+          if (started && !won) {
+            tick += 1;
+            hud();
+          }
+        }, 500);
+
+        function boot(tries) {
+          if (sf() && typeof sf().invoke === "function") {
+            invoke("sandforge.example:solitaire-boot")
+              .then(function (res) {
+                wins = (res && res.wins) || 0;
+                bestTime = (res && res.bestTime) || 0;
+                deal();
+              })
+              .catch(function () {
+                deal();
+              });
+            return;
+          }
+          if (tries > 80) {
+            deal();
+            return;
+          }
+          setTimeout(function () {
+            boot(tries + 1);
+          }, 50);
+        }
+        boot(0);
+      })();
+    </script>
+  </body>
+</html>

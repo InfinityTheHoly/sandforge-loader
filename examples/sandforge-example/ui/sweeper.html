@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shaft Sweeper — SandForge</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #10140e; color: #d7e6d4; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
+      .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
+      .top { display: flex; justify-content: space-between; align-items: baseline; }
+      .banner { margin: 0; color: #ffe700; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; font-size: 11px; }
+      .sub { margin: 0; color: #8aa392; font-size: 11px; }
+      .bar { display: flex; gap: 8px; margin: 8px 0; align-items: center; }
+      button { background: #14301f; color: #ffe700; border: 1px solid #3d6b48; border-radius: 2px 8px 2px 8px; padding: 5px 10px; font: 700 11px/1 "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+      button:hover { border-color: #ffe700; }
+      .hud { margin-left: auto; display: flex; gap: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #b7cbb4; }
+      .hud b { color: #ffe700; }
+      canvas { display: block; background: #123322; border: 1px solid #2f5a3c; border-radius: 2px 10px 2px 10px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <p class="banner">Shaft Sweeper</p>
+        <p class="sub">Left click digs. Right click marks a charge. First dig is always safe.</p>
+      </div>
+      <div class="bar">
+        <button type="button" id="back">Arcade</button>
+        <button type="button" id="new">New shaft</button>
+        <div class="hud">
+          <span>Charges <b id="left">14</b></span>
+          <span>Time <b id="time">0</b></span>
+          <span>Clears <b id="wins">0</b></span>
+        </div>
+      </div>
+      <canvas id="c" width="700" height="476"></canvas>
+    </div>
+    <script>
+      (function () {
+        var COLS = 14, ROWS = 9, MINES = 14, CELL = 48, PADX = 14, PADY = 16;
+        var canvas = document.getElementById("c");
+        var ctx = canvas.getContext("2d");
+        var grid, started, dead, won, wins, best, marks;
+        function sf() { return window.sandforge || window.sandforgeAPI || null; }
+        function invoke() {
+          var b = sf();
+          if (!b || !b.invoke) return Promise.reject();
+          return b.invoke.apply(b, arguments);
+        }
+        function cell() { return { mine: false, open: false, flag: false, n: 0 }; }
+        function reset() {
+          grid = [];
+          for (var y = 0; y < ROWS; y++) {
+            grid[y] = [];
+            for (var x = 0; x < COLS; x++) grid[y][x] = cell();
+          }
+          started = 0;
+          dead = false;
+          won = false;
+          marks = 0;
+          hud();
+          draw();
+        }
+        function hud() {
+          document.getElementById("left").textContent = String(MINES - marks);
+          document.getElementById("time").textContent = started ? String(Math.floor((Date.now() - started) / 1000)) : "0";
+          document.getElementById("wins").textContent = String(wins);
+        }
+        function neighbors(x, y, fn) {
+          for (var dy = -1; dy <= 1; dy++) {
+            for (var dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              var nx = x + dx, ny = y + dy;
+              if (nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS) fn(nx, ny, grid[ny][nx]);
+            }
+          }
+        }
+        function plant(sx, sy) {
+          var spots = [];
+          for (var y = 0; y < ROWS; y++) {
+            for (var x = 0; x < COLS; x++) {
+              if (Math.abs(x - sx) <= 1 && Math.abs(y - sy) <= 1) continue;
+              spots.push({ x: x, y: y });
+            }
+          }
+          for (var i = spots.length - 1; i > 0; i--) {
+            var j = (Math.random() * (i + 1)) | 0;
+            var t = spots[i]; spots[i] = spots[j]; spots[j] = t;
+          }
+          for (i = 0; i < MINES; i++) grid[spots[i].y][spots[i].x].mine = true;
+          for (y = 0; y < ROWS; y++) {
+            for (x = 0; x < COLS; x++) {
+              var n = 0;
+              neighbors(x, y, function (_x, _y, c) { if (c.mine) n += 1; });
+              grid[y][x].n = n;
+            }
+          }
+        }
+        function flood(x, y) {
+          var c = grid[y][x];
+          if (c.open || c.flag) return;
+          c.open = true;
+          if (c.n === 0 && !c.mine) neighbors(x, y, flood);
+        }
+        function checkWin() {
+          var hidden = 0;
+          for (var y = 0; y < ROWS; y++) {
+            for (var x = 0; x < COLS; x++) {
+              if (!grid[y][x].open) hidden += 1;
+            }
+          }
+          if (hidden === MINES) {
+            won = true;
+            wins += 1;
+            var t = Math.max(1, Math.floor((Date.now() - started) / 1000));
+            if (!best || t < best) best = t;
+            invoke("sandforge.example:arcade-score", { game: "sweeper", win: true, time: t }).catch(function () {});
+          }
+        }
+        function hit(mx, my) {
+          var x = Math.floor((mx - PADX) / CELL);
+          var y = Math.floor((my - PADY) / CELL);
+          if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return null;
+          return { x: x, y: y };
+        }
+        function openAt(x, y) {
+          if (dead || won) return;
+          if (!started) {
+            started = Date.now();
+            plant(x, y);
+          }
+          var c = grid[y][x];
+          if (c.flag || c.open) return;
+          if (c.mine) {
+            dead = true;
+            for (var yy = 0; yy < ROWS; yy++) {
+              for (var xx = 0; xx < COLS; xx++) if (grid[yy][xx].mine) grid[yy][xx].open = true;
+            }
+            return;
+          }
+          flood(x, y);
+          checkWin();
+        }
+        function draw() {
+          ctx.fillStyle = "#123322";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          var nums = ["", "#7ee8ff", "#9be37a", "#ffe700", "#ff8a5b", "#ff5d5d", "#d4a5ff", "#fff", "#cbd5e1"];
+          for (var y = 0; y < ROWS; y++) {
+            for (var x = 0; x < COLS; x++) {
+              var c = grid[y][x];
+              var px = PADX + x * CELL, py = PADY + y * CELL;
+              ctx.fillStyle = c.open ? "#0c1c14" : ((x + y) % 2 ? "#1b3d28" : "#174232");
+              ctx.fillRect(px + 1, py + 1, CELL - 2, CELL - 2);
+              if (c.open && c.mine) {
+                ctx.fillStyle = "#c0392b";
+                ctx.beginPath();
+                ctx.arc(px + CELL / 2, py + CELL / 2, 10, 0, Math.PI * 2);
+                ctx.fill();
+              } else if (c.open && c.n) {
+                ctx.fillStyle = nums[c.n];
+                ctx.font = "700 18px Segoe UI,sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(String(c.n), px + CELL / 2, py + CELL / 2 + 1);
+              } else if (!c.open && c.flag) {
+                ctx.fillStyle = "#ffe700";
+                ctx.font = "700 16px Segoe UI,sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("▲", px + CELL / 2, py + CELL / 2 + 1);
+              }
+            }
+          }
+          if (dead || won) {
+            ctx.fillStyle = "rgba(8,16,12,0.55)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#ffe700";
+            ctx.font = "700 28px Segoe UI,sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(won ? "SHAFT CLEARED" : "CHARGE HIT", canvas.width / 2, canvas.height / 2);
+          }
+        }
+        function pos(ev) {
+          var r = canvas.getBoundingClientRect();
+          return { x: ((ev.clientX - r.left) / r.width) * canvas.width, y: ((ev.clientY - r.top) / r.height) * canvas.height };
+        }
+        canvas.addEventListener("click", function (e) {
+          var p = pos(e), h = hit(p.x, p.y);
+          if (h) openAt(h.x, h.y);
+          hud();
+          draw();
+        });
+        canvas.addEventListener("contextmenu", function (e) {
+          e.preventDefault();
+          if (dead || won) return;
+          var p = pos(e), h = hit(p.x, p.y);
+          if (!h) return;
+          var c = grid[h.y][h.x];
+          if (c.open) return;
+          c.flag = !c.flag;
+          marks += c.flag ? 1 : -1;
+          hud();
+          draw();
+        });
+        document.getElementById("back").onclick = function () { location.href = "arcade.html"; };
+        document.getElementById("new").onclick = reset;
+        window.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") location.href = "arcade.html";
+          if (e.key === "n" || e.key === "N") reset();
+        });
+        wins = 0;
+        best = 0;
+        reset();
+        setInterval(function () { if (started && !dead && !won) hud(); }, 400);
+        (function boot(n) {
+          var b = sf();
+          if (b && b.invoke) {
+            invoke("sandforge.example:arcade-boot").then(function (s) {
+              wins = (s && s.sweeperWins) || 0;
+              best = (s && s.sweeperBest) || 0;
+              hud();
+            }).catch(function () {});
+            return;
+          }
+          if (n < 80) setTimeout(function () { boot(n + 1); }, 50);
+        })(0);
+      })();
+    </script>
+  </body>
+</html>

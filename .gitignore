@@ -1,0 +1,8 @@
+installed.json
+stock-preload.js
+stock-preload.patched.js
+node_modules/
+*.log
+*.asar
+.DS_Store
+Thumbs.db

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Silt Sort — SandForge</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #12100c; color: #e8dcc8; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
+      .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
+      .top { display: flex; justify-content: space-between; align-items: baseline; }
+      .banner { margin: 0; color: #ffe700; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; font-size: 11px; }
+      .sub { margin: 0; color: #8a7a62; font-size: 11px; }
+      .bar { display: flex; gap: 8px; margin: 8px 0; align-items: center; }
+      button { background: #2a1c10; color: #ffe700; border: 1px solid #6b4a2a; border-radius: 2px 8px 2px 8px; padding: 5px 10px; font: 700 11px/1 "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+      button:hover { border-color: #ffe700; }
+      .hud { margin-left: auto; display: flex; gap: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #cbb89a; }
+      .hud b { color: #ffe700; }
+      canvas { display: block; background: #1a160f; border: 1px solid #5a3d22; border-radius: 2px 10px 2px 10px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <p class="banner">Silt Sort</p>
+        <p class="sub">Click a flask, then another. Pour matching silt. Fill each flask with one color.</p>
+      </div>
+      <div class="bar">
+        <button type="button" id="back">Arcade</button>
+        <button type="button" id="new">New pour</button>
+        <div class="hud">
+          <span>Moves <b id="moves">0</b></span>
+          <span>Clears <b id="wins">0</b></span>
+        </div>
+      </div>
+      <canvas id="c" width="700" height="476"></canvas>
+    </div>
+    <script>
+      (function () {
+        var CAP = 4, COLORS = ["#c46a2d", "#7ee8ff", "#ffe700", "#9be37a"];
+        var canvas = document.getElementById("c");
+        var ctx = canvas.getContext("2d");
+        var tubes, selected, moves, won, wins, started;
+        function sf() { return window.sandforge || window.sandforgeAPI || null; }
+        function invoke() {
+          var b = sf();
+          if (!b || !b.invoke) return Promise.reject();
+          return b.invoke.apply(b, arguments);
+        }
+        function hud() {
+          document.getElementById("moves").textContent = String(moves);
+          document.getElementById("wins").textContent = String(wins);
+        }
+        function shuffle(a) {
+          for (var i = a.length - 1; i > 0; i--) {
+            var j = (Math.random() * (i + 1)) | 0;
+            var t = a[i]; a[i] = a[j]; a[j] = t;
+          }
+          return a;
+        }
+        function reset() {
+          var pool = [];
+          COLORS.forEach(function (c) {
+            for (var i = 0; i < CAP; i++) pool.push(c);
+          });
+          shuffle(pool);
+          tubes = [[], [], [], [], []];
+          for (var i = 0; i < 4; i++) tubes[i] = pool.slice(i * CAP, i * CAP + CAP);
+          selected = -1;
+          moves = 0;
+          won = false;
+          started = Date.now();
+          hud();
+          draw();
+        }
+        function topRun(tube) {
+          if (!tube.length) return { color: null, n: 0 };
+          var color = tube[tube.length - 1], n = 0;
+          for (var i = tube.length - 1; i >= 0 && tube[i] === color; i--) n += 1;
+          return { color: color, n: n };
+        }
+        function canPour(from, to) {
+          if (from === to || !tubes[from].length) return false;
+          if (tubes[to].length >= CAP) return false;
+          var run = topRun(tubes[from]);
+          if (tubes[to].length && tubes[to][tubes[to].length - 1] !== run.color) return false;
+          return Math.min(run.n, CAP - tubes[to].length);
+        }
+        function pour(from, to) {
+          var n = canPour(from, to);
+          if (!n) return false;
+          for (var i = 0; i < n; i++) tubes[to].push(tubes[from].pop());
+          moves += 1;
+          if (tubes.every(function (t) { return !t.length || (t.length === CAP && t.every(function (c) { return c === t[0]; })); })) {
+            won = true;
+            wins += 1;
+            invoke("sandforge.example:arcade-score", {
+              game: "sort",
+              win: true,
+              time: Math.max(1, Math.floor((Date.now() - started) / 1000)),
+              score: moves,
+            }).catch(function () {});
+          }
+          hud();
+          return true;
+        }
+        function tubeBox(i) {
+          var n = tubes.length;
+          var w = 70, gap = 36;
+          var total = n * w + (n - 1) * gap;
+          var x = (700 - total) / 2 + i * (w + gap);
+          return { x: x, y: 70, w: w, h: 320 };
+        }
+        function draw() {
+          ctx.fillStyle = "#1a160f";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          tubes.forEach(function (tube, i) {
+            var b = tubeBox(i);
+            ctx.strokeStyle = i === selected ? "#ffe700" : "#6b4a2a";
+            ctx.lineWidth = i === selected ? 3 : 2;
+            ctx.beginPath();
+            ctx.moveTo(b.x, b.y);
+            ctx.lineTo(b.x, b.y + b.h);
+            ctx.lineTo(b.x + b.w, b.y + b.h);
+            ctx.lineTo(b.x + b.w, b.y);
+            ctx.stroke();
+            var layer = b.h / CAP;
+            tube.forEach(function (c, k) {
+              ctx.fillStyle = c;
+              ctx.fillRect(b.x + 6, b.y + b.h - (k + 1) * layer + 4, b.w - 12, layer - 6);
+            });
+          });
+          if (won) {
+            ctx.fillStyle = "rgba(12,10,6,0.7)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#ffe700";
+            ctx.font = "700 28px Segoe UI,sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("SILT SETTLED", canvas.width / 2, canvas.height / 2);
+          }
+        }
+        function pos(ev) {
+          var r = canvas.getBoundingClientRect();
+          return { x: ((ev.clientX - r.left) / r.width) * canvas.width, y: ((ev.clientY - r.top) / r.height) * canvas.height };
+        }
+        canvas.addEventListener("click", function (e) {
+          if (won) return;
+          var p = pos(e);
+          var hit = -1;
+          tubes.forEach(function (_t, i) {
+            var b = tubeBox(i);
+            if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h + 20) hit = i;
+          });
+          if (hit < 0) { selected = -1; draw(); return; }
+          if (selected < 0) { selected = hit; draw(); return; }
+          if (selected === hit) { selected = -1; draw(); return; }
+          pour(selected, hit);
+          selected = -1;
+          draw();
+        });
+        document.getElementById("back").onclick = function () { location.href = "arcade.html"; };
+        document.getElementById("new").onclick = reset;
+        window.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") location.href = "arcade.html";
+          if (e.key === "n" || e.key === "N") reset();
+        });
+        wins = 0;
+        reset();
+        (function boot(n) {
+          var b = sf();
+          if (b && b.invoke) {
+            invoke("sandforge.example:arcade-boot").then(function (s) {
+              wins = (s && s.sortWins) || 0;
+              hud();
+            }).catch(function () {});
+            return;
+          }
+          if (n < 80) setTimeout(function () { boot(n + 1); }, 50);
+        })(0);
+      })();
+    </script>
+  </body>
+</html>

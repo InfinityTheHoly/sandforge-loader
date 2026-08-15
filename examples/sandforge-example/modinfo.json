@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "sandforge.example",
+  "modID": "sandforge.example",
+  "name": "SandForge",
+  "version": "1.2.0",
+  "apiVersion": 1,
+  "author": "SandForge",
+  "description": "Main-menu status for the SandForge loader, in-game API docs, and an arcade (snake, worker fluid tank, minesweeper, silt sort, klondike). Works in official Sandkit. The loader is a local GitHub install.",
+  "entry": "main.js",
+  "electronEntrypoint": "entry.electron.js",
+  "gameEntrypoint": "entry.game.js",
+  "workerEntrypoint": "entry.worker.js",
+  "loadOrder": 100
+}

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Puddle Tank — SandForge</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #07141a; color: #d7eef2; font: 12px/1.35 "Segoe UI", sans-serif; overflow: hidden; user-select: none; }
+      .wrap { box-sizing: border-box; height: 100%; padding: 10px 12px; display: flex; flex-direction: column; }
+      .top { display: flex; justify-content: space-between; align-items: baseline; }
+      .banner { margin: 0; color: #7ee8ff; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; font-size: 11px; }
+      .sub { margin: 0; color: #6a9aa6; font-size: 11px; }
+      .bar { display: flex; gap: 8px; margin: 8px 0; align-items: center; }
+      button { background: #0d2a33; color: #7ee8ff; border: 1px solid #2a6a78; border-radius: 2px 8px 2px 8px; padding: 5px 10px; font: 700 11px/1 "Segoe UI", sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+      button:hover { border-color: #7ee8ff; }
+      .hud { margin-left: auto; display: flex; gap: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9ad4df; }
+      .hud b { color: #ffe700; }
+      .stage { position: relative; width: 700px; height: 476px; border: 1px solid #2a6a78; border-radius: 2px 10px 2px 10px; overflow: hidden; cursor: crosshair; }
+      .stage canvas { position: absolute; inset: 0; width: 700px; height: 476px; display: block; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <p class="banner">Puddle Tank</p>
+        <p class="sub">SPH liquid in a worker, metaball surface on the GPU. Drag to stir, hold to pour, flip gravity, fill the cups.</p>
+      </div>
+      <div class="bar">
+        <button type="button" id="back">Arcade</button>
+        <button type="button" id="flip">Flip</button>
+        <button type="button" id="new">Reset</button>
+        <div class="hud">
+          <span>Cups <b id="cups">0</b>/3</span>
+          <span>Drops <b id="drops">0</b></span>
+          <span>Clears <b id="wins">0</b></span>
+        </div>
+      </div>
+      <div class="stage">
+        <canvas id="gl" width="700" height="476"></canvas>
+        <canvas id="ui" width="700" height="476"></canvas>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var W = 700, H = 476;
+        var glCanvas = document.getElementById("gl");
+        var ui = document.getElementById("ui");
+        var uix = ui.getContext("2d");
+        var worker = null;
+        var particles = new Float32Array(0);
+        var cups = [];
+        var gy = 1;
+        var won = false;
+        var wins = 0;
+        var started = Date.now();
+        var reported = false;
+        var pouring = false;
+        var last = null;
+        var glapi = null;
+
+        function sf() { return window.sandforge || window.sandforgeAPI || null; }
+        function invoke() {
+          var b = sf();
+          if (!b || !b.invoke) return Promise.reject();
+          return b.invoke.apply(b, arguments);
+        }
+        function hud() {
+          var filled = 0;
+          for (var i = 0; i < cups.length; i++) {
+            if (cups[i].n >= (cups[i].need || 42)) filled += 1;
+          }
+          document.getElementById("cups").textContent = String(filled);
+          document.getElementById("drops").textContent = String((particles.length / 3) | 0);
+          document.getElementById("wins").textContent = String(wins);
+        }
+        function pos(ev) {
+          var r = ui.getBoundingClientRect();
+          return {
+            x: ((ev.clientX - r.left) / r.width) * W,
+            y: ((ev.clientY - r.top) / r.height) * H,
+          };
+        }
+        function send(msg) {
+          if (worker) worker.postMessage(msg);
+        }
+
+        function compile(gl, type, src) {
+          var sh = gl.createShader(type);
+          gl.shaderSource(sh, src);
+          gl.compileShader(sh);
+          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(sh));
+            return null;
+          }
+          return sh;
+        }
+        function program(gl, vs, fs) {
+          var p = gl.createProgram();
+          gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, vs));
+          gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, fs));
+          gl.linkProgram(p);
+          if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(p));
+            return null;
+          }
+          return p;
+        }
+
+        function drawCanvasFallback(data) {
+          var ctx = glCanvas.getContext("2d");
+          if (!ctx) return;
+          ctx.fillStyle = "#072028";
+          ctx.fillRect(0, 0, W, H);
+          ctx.filter = "blur(7px) contrast(220%)";
+          for (var i = 0; i < data.length; i += 3) {
+            var spd = data[i + 2] || 0;
+            ctx.fillStyle = spd > 80 ? "rgba(200,245,255,0.55)" : "rgba(40,190,220,0.5)";
+            ctx.beginPath();
+            ctx.arc(data[i], data[i + 1], 11, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.filter = "none";
+        }
+
+        function makeGL() {
+          var gl = glCanvas.getContext("webgl", { premultipliedAlpha: false, alpha: true, antialias: false });
+          if (!gl) return null;
+          var ext = gl.getExtension("OES_texture_float");
+          var splat = program(
+            gl,
+            "attribute vec2 a_pos; attribute float a_spd; uniform vec2 u_res; uniform float u_size; varying float v_spd; void main(){ vec2 clip=vec2((a_pos.x/u_res.x)*2.0-1.0, 1.0-(a_pos.y/u_res.y)*2.0); gl_Position=vec4(clip,0.0,1.0); gl_PointSize=u_size; v_spd=a_spd; }",
+            "precision mediump float; varying float v_spd; void main(){ vec2 p=gl_PointCoord*2.0-1.0; float d=dot(p,p); if(d>1.0) discard; float a=exp(-d*2.8); gl_FragColor=vec4(a, a*(0.45+v_spd*0.03), 0.0, a); }",
+          );
+          var blit = program(
+            gl,
+            "attribute vec2 a_quad; varying vec2 v_uv; void main(){ v_uv=a_quad*0.5+0.5; gl_Position=vec4(a_quad,0.0,1.0); }",
+            "precision mediump float; varying vec2 v_uv; uniform sampler2D u_tex; uniform vec2 u_res; void main(){ vec4 s=texture2D(u_tex,v_uv); float f=s.r; if(f<0.42) discard; float edge=smoothstep(0.42,0.78,f); float foam=clamp(s.g-0.25,0.0,1.0); vec3 deep=vec3(0.05,0.28,0.38); vec3 mid=vec3(0.18,0.72,0.88); vec3 hi=vec3(0.78,0.96,1.0); vec3 col=mix(deep,mid,edge); col=mix(col,hi,foam*0.55*edge); float spec=smoothstep(0.72,0.95,f)*0.35; col+=spec; gl_FragColor=vec4(col,0.92); }",
+          );
+          if (!splat || !blit) return null;
+          var fbo = gl.createFramebuffer();
+          var tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+          var buf = gl.createBuffer();
+          var quad = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+          var posLoc = gl.getAttribLocation(splat, "a_pos");
+          var spdLoc = gl.getAttribLocation(splat, "a_spd");
+          var qLoc = gl.getAttribLocation(blit, "a_quad");
+          return {
+            draw: function (data) {
+              var count = (data.length / 3) | 0;
+              gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+              gl.viewport(0, 0, W, H);
+              gl.clearColor(0, 0, 0, 0);
+              gl.clear(gl.COLOR_BUFFER_BIT);
+              gl.enable(gl.BLEND);
+              gl.blendFunc(gl.ONE, gl.ONE);
+              gl.useProgram(splat);
+              gl.uniform2f(gl.getUniformLocation(splat, "u_res"), W, H);
+              gl.uniform1f(gl.getUniformLocation(splat, "u_size"), 42);
+              gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+              gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+              gl.enableVertexAttribArray(posLoc);
+              gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 12, 0);
+              if (spdLoc >= 0) {
+                gl.enableVertexAttribArray(spdLoc);
+                gl.vertexAttribPointer(spdLoc, 1, gl.FLOAT, false, 12, 8);
+              }
+              gl.drawArrays(gl.POINTS, 0, count);
+              gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+              gl.viewport(0, 0, W, H);
+              gl.clearColor(0.027, 0.125, 0.157, 1);
+              gl.clear(gl.COLOR_BUFFER_BIT);
+              gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+              gl.useProgram(blit);
+              gl.activeTexture(gl.TEXTURE0);
+              gl.bindTexture(gl.TEXTURE_2D, tex);
+              gl.uniform1i(gl.getUniformLocation(blit, "u_tex"), 0);
+              gl.uniform2f(gl.getUniformLocation(blit, "u_res"), W, H);
+              gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+              gl.enableVertexAttribArray(qLoc);
+              gl.vertexAttribPointer(qLoc, 2, gl.FLOAT, false, 0, 0);
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            },
+          };
+        }
+
+        function drawCups() {
+          uix.clearRect(0, 0, W, H);
+          cups.forEach(function (c) {
+            var left = c.x - c.w / 2;
+            var top = c.y - c.h;
+            uix.strokeStyle = c.n >= c.need ? "#ffe700" : "rgba(126,232,255,0.85)";
+            uix.lineWidth = 3;
+            uix.beginPath();
+            uix.moveTo(left, top);
+            uix.lineTo(left, c.y);
+            uix.lineTo(left + c.w, c.y);
+            uix.lineTo(left + c.w, top);
+            uix.stroke();
+          });
+          if (won) {
+            uix.fillStyle = "rgba(6,16,20,0.45)";
+            uix.fillRect(0, 0, W, H);
+            uix.fillStyle = "#7ee8ff";
+            uix.font = "700 28px Segoe UI,sans-serif";
+            uix.textAlign = "center";
+            uix.fillText("CUPS FULL", W / 2, H / 2);
+          }
+        }
+
+        function onState(msg) {
+          particles = msg.particles || particles;
+          cups = msg.cups || cups;
+          gy = msg.gy;
+          if (msg.won && !won) {
+            won = true;
+            if (!reported) {
+              reported = true;
+              wins += 1;
+              invoke("sandforge.example:arcade-score", {
+                game: "puddle",
+                win: true,
+                time: Math.max(1, Math.floor((Date.now() - started) / 1000)),
+              }).catch(function () {});
+            }
+          }
+          hud();
+          if (glapi) glapi.draw(particles);
+          else drawCanvasFallback(particles);
+          drawCups();
+        }
+
+        function startWorker() {
+          if (worker) worker.terminate();
+          worker = new Worker("puddle-worker.js");
+          worker.onmessage = function (ev) {
+            if (ev.data && ev.data.type === "state") onState(ev.data);
+          };
+          worker.onerror = function (err) {
+            console.error("[puddle] worker", err);
+          };
+          won = false;
+          reported = false;
+          started = Date.now();
+          send({ type: "init", w: W, h: H });
+        }
+
+        glapi = makeGL();
+        ui.addEventListener("mousedown", function (e) {
+          pouring = true;
+          last = pos(e);
+          send({ type: "pour", x: last.x, y: last.y });
+        });
+        window.addEventListener("mouseup", function () {
+          pouring = false;
+          last = null;
+        });
+        ui.addEventListener("mousemove", function (e) {
+          if (!pouring) return;
+          var p = pos(e);
+          if (last) send({ type: "stir", x: p.x, y: p.y, dx: p.x - last.x, dy: p.y - last.y });
+          send({ type: "pour", x: p.x, y: p.y });
+          last = p;
+        });
+        document.getElementById("flip").onclick = function () { send({ type: "flip" }); };
+        document.getElementById("new").onclick = function () {
+          won = false;
+          reported = false;
+          started = Date.now();
+          send({ type: "reset" });
+        };
+        document.getElementById("back").onclick = function () {
+          if (worker) worker.terminate();
+          location.href = "arcade.html";
+        };
+        window.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") {
+            if (worker) worker.terminate();
+            location.href = "arcade.html";
+          }
+          if (e.key === " " || e.key === "f" || e.key === "F") {
+            e.preventDefault();
+            send({ type: "flip" });
+          }
+          if (e.key === "n" || e.key === "N") send({ type: "reset" });
+        });
+        window.addEventListener("beforeunload", function () {
+          if (worker) worker.terminate();
+        });
+        setInterval(function () {
+          send({ type: "tick", steps: 3 });
+        }, 16);
+        startWorker();
+        (function boot(n) {
+          var b = sf();
+          if (b && b.invoke) {
+            invoke("sandforge.example:arcade-boot").then(function (s) {
+              wins = (s && s.puddleWins) || 0;
+              hud();
+            }).catch(function () {});
+            return;
+          }
+          if (n < 80) setTimeout(function () { boot(n + 1); }, 50);
+        })(0);
+      })();
+    </script>
+  </body>
+</html>

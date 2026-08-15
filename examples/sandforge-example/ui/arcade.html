@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Arcade — SandForge</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0c10;
+        color: #e2e8f0;
+        font: 13px/1.4 "Segoe UI", "Noto Sans", system-ui, sans-serif;
+        overflow: hidden;
+        user-select: none;
+      }
+      .wrap {
+        box-sizing: border-box;
+        height: 100%;
+        padding: 16px 18px 14px;
+        display: flex;
+        flex-direction: column;
+      }
+      .top h1 {
+        margin: 0;
+        color: #ffe700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-size: 16px;
+      }
+      .top p {
+        margin: 6px 0 0;
+        color: #94a3b8;
+        font-size: 12px;
+      }
+      .grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        flex: 1;
+        min-height: 0;
+      }
+      .card {
+        text-align: left;
+        background: #0c1016;
+        color: #e2e8f0;
+        border: 1px solid rgba(203, 213, 225, 0.55);
+        border-radius: 2px 12px 2px 12px;
+        padding: 14px 14px 12px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .card:hover,
+      .card:focus {
+        border-color: #ffe700;
+        outline: none;
+      }
+      .card .name {
+        color: #ffe700;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-size: 13px;
+      }
+      .card .blurb {
+        color: #cbd5e1;
+        font-size: 12px;
+        flex: 1;
+      }
+      .card .meta {
+        color: #64748b;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .wide {
+        grid-column: 1 / -1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="top">
+        <h1>SandForge Arcade</h1>
+        <p>Pick a game. Esc closes the window. Scores are stored by the loader.</p>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <script>
+      (function () {
+        var GAMES = [
+          {
+            id: "snake",
+            file: "snake.html",
+            name: "Vein Snake",
+            blurb: "A gold vein eating ore. Don't hit bedrock or yourself.",
+            meta: function (s) {
+              return s.snakeBest ? "Best " + s.snakeBest : "No score yet";
+            },
+          },
+          {
+            id: "puddle",
+            file: "puddle.html",
+            name: "Puddle Tank",
+            blurb: "SPH liquid in a worker. Stir, pour, flip, fill the cups.",
+            meta: function (s) {
+              return (s.puddleWins || 0) + " clears";
+            },
+          },
+          {
+            id: "sweeper",
+            file: "sweeper.html",
+            name: "Shaft Sweeper",
+            blurb: "Clear the shaft. Charges hide in the sand.",
+            meta: function (s) {
+              return (s.sweeperWins || 0) + " clears · best " + (s.sweeperBest ? s.sweeperBest + "s" : "—");
+            },
+          },
+          {
+            id: "sort",
+            file: "sort.html",
+            name: "Silt Sort",
+            blurb: "Pour colored silt until each flask is one grain.",
+            meta: function (s) {
+              return (s.sortWins || 0) + " clears";
+            },
+          },
+          {
+            id: "solo",
+            file: "solitaire.html",
+            name: "Klondike",
+            blurb: "Classic solitaire. Stock, tableau, foundations.",
+            meta: function (s) {
+              return (s.soloWins || 0) + " wins · best " + (s.soloBestTime ? fmt(s.soloBestTime) : "—");
+            },
+            wide: true,
+          },
+        ];
+        function fmt(sec) {
+          sec = Math.max(0, sec | 0);
+          var m = (sec / 60) | 0;
+          var s = sec % 60;
+          return m + ":" + (s < 10 ? "0" : "") + s;
+        }
+        function sf() {
+          return window.sandforge || window.sandforgeAPI || null;
+        }
+        function paint(stats) {
+          stats = stats || {};
+          var grid = document.getElementById("grid");
+          grid.innerHTML = "";
+          GAMES.forEach(function (g) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "card" + (g.wide ? " wide" : "");
+            btn.innerHTML =
+              '<div class="name">' +
+              g.name +
+              '</div><div class="blurb">' +
+              g.blurb +
+              '</div><div class="meta">' +
+              g.meta(stats) +
+              "</div>";
+            btn.onclick = function () {
+              location.href = g.file;
+            };
+            grid.appendChild(btn);
+          });
+        }
+        function boot(tries) {
+          var b = sf();
+          if (b && typeof b.invoke === "function") {
+            b.invoke("sandforge.example:arcade-boot")
+              .then(paint)
+              .catch(function () {
+                paint({});
+              });
+            return;
+          }
+          if (tries > 80) {
+            paint({});
+            return;
+          }
+          setTimeout(function () {
+            boot(tries + 1);
+          }, 50);
+        }
+        window.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") window.close();
+        });
+        boot(0);
+      })();
+    </script>
+  </body>
+</html>
