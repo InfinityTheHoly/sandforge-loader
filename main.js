@@ -1,6 +1,6 @@
 /**
  * SandForge loader — Electron resources/app when installed.
- * Steam still launches Sandustry.exe. This folder is not a Workshop item.
+ * Steam still launches Sandustry.exe. Sandkit entry is sandkit.js, not this file.
  */
 "use strict";
 

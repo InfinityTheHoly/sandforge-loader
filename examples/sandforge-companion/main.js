@@ -333,7 +333,7 @@ function renderDocs(sectionId) {
 
 function renderInactive() {
   return (
-    '<p class="sf-ex-sub">Official Sandkit loaded this Workshop item. The SandForge loader is a local GitHub install — it is not on the Workshop.</p>' +
+    '<p class="sf-ex-sub">Official Sandkit loaded this Workshop item. SandForge Loader is a separate Workshop item — quit the game and run install.cmd from that folder.</p>' +
     '<div class="sf-ex-group"><h3>What still works</h3>' +
     '<div class="sf-ex-item"><p>This badge, this panel, and the GitHub link. Ctrl-click Arcade needs the loader.</p></div></div>' +
     '<div class="sf-ex-group"><h3>Ecosystem</h3>' +

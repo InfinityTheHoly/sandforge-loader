@@ -1,7 +1,7 @@
 {
   "name": "sandforge-loader",
   "version": "1.0.0",
-  "description": "SandForge loader — in-process mod loader for Sandustry. Unofficial. Not a Workshop item.",
+  "description": "Unofficial extra mod support for Sandustry. Subscribe, quit the game, run install.cmd.",
   "main": "main.js",
   "types": "types/sandforge.d.ts",
   "private": true,

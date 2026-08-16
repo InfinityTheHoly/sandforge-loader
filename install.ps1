@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = "Stop"
 $LoaderDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $AppMarker = Join-Path $LoaderDir "package.json"
+# This folder may live under %AppData%\sandustry\mods\sandforge-loader.
 
 function Test-IsAdmin {
   $id = [Security.Principal.WindowsIdentity]::GetCurrent()

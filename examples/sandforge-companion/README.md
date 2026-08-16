@@ -5,7 +5,7 @@ Copy this folder to `%AppData%\sandustry\mods\sandforge-companion` (or upload it
 - **Without the loader** — main menu shows **SandForge not active** and a GitHub link. Badge and docs still work.
 - **With the loader** — **SandForge Active**, live statuses, API docs, and Ctrl-click the badge (or Arcade in the panel) to open a **select menu**: Vein Snake, Puddle Tank, Shaft Sweeper, Silt Sort, and Klondike. Scores are stored by the loader.
 
-This folder is safe to upload. **Do not upload the loader** (`sandforge-loader` / `resources/app`). Do not include leftover nested copies of this folder.
+This folder is the Companion example. The loader is a separate Workshop item (`sandustry.sandforge-loader`). Do not include leftover nested copies of this folder.
 
 Created and maintained by [InfinityTheHoly](https://github.com/InfinityTheHoly).
 

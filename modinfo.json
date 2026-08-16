@@ -1,0 +1,13 @@
+{
+  "manifestVersion": 1,
+  "id": "sandustry.sandforge-loader",
+  "modID": "sandustry.sandforge-loader",
+  "name": "SandForge Loader",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "InfinityTheHoly",
+  "description": "Unofficial extra mod support for Sandustry (Windows).\n\nSubscribing is not enough. Fully quit the game, open this item’s folder, and run install.cmd. Then launch Sandustry from Steam. Windows may ask for Administrator permission.\n\nAfter that, Steam still starts the game normally. SandForge can load more powerful mods, keep disabled mods installed, and run maps larger than 3840.\n\nIf a game update turns it off, quit and run install.cmd again. Uninstall with uninstall.cmd in this folder.\n\nCompanion (status / arcade) and Toolkit (mods, maps, editor) are separate Workshop items.\n\nUnofficial. Not affiliated with Sandustry or its developers. Only install mods you trust.",
+  "entry": "sandkit.js",
+  "sandforgeHost": true,
+  "loadOrder": -1000
+}
